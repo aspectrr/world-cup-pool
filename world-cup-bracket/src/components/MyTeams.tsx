@@ -164,7 +164,9 @@ export function MyTeams({
 							<span
 								className={`mtc-status ${isAlive ? "alive" : "eliminated"}`}
 							>
-								{isAlive ? `Alive — ${stage.toUpperCase()} STAGE` : "Eliminated"}
+								{isAlive
+									? `Alive — ${stage.toUpperCase()} STAGE`
+									: "Eliminated"}
 							</span>
 
 							<div className="mtc-matches">
