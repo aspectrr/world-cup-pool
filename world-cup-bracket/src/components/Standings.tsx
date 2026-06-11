@@ -308,7 +308,7 @@ export function Standings({
                   {p.alive}/6
                 </div>
                 <div className="standing-record">
-                  {p.eliminated ? "ELIMINATED" : p.bestStage.toUpperCase()}
+                  {p.eliminated ? "ELIMINATED" : p.bestStage.toUpperCase() + " STAGE"}
                 </div>
                 {prizeLabel && (
                   <div className="standing-prize">{prizeLabel}</div>
