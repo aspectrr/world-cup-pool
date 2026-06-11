@@ -42,7 +42,7 @@ export interface KnockoutMatch {
 
 export type Match = GroupMatch | KnockoutMatch;
 
-export type Tab = "standings" | "groups" | "bracket" | "my-teams";
+export type Tab = "standings" | "groups" | "games" | "bracket" | "my-teams";
 
 export interface GroupStanding {
 	teamIdx: number;

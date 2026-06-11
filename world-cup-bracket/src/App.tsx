@@ -4,6 +4,7 @@ import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
 import { useESPNLive } from "./hooks/useESPNLive";
 import { Standings } from "./components/Standings";
 import { GroupsView } from "./components/GroupsView";
+import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
 
@@ -93,6 +94,12 @@ export default function App() {
 					Groups
 				</button>
 				<button
+					className={`tab-btn${tab === "games" ? " active" : ""}`}
+					onClick={() => setTab("games")}
+				>
+					Games
+				</button>
+				<button
 					className={`tab-btn${tab === "bracket" ? " active" : ""}`}
 					onClick={() => setTab("bracket")}
 				>
@@ -117,6 +124,7 @@ export default function App() {
 				<Standings gMatches={gMatches} kMatches={kMatches} />
 			)}
 			{tab === "groups" && <GroupsView matches={gMatches} />}
+			{tab === "games" && <GamesView gMatches={gMatches} kMatches={kMatches} />}
 			{tab === "bracket" && (
 				<BracketView
 					matches={kMatches}
