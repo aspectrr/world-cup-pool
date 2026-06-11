@@ -177,7 +177,13 @@ export function GamesView({
 				</div>
 			))}
 			{Object.keys(gamesByDay).length === 0 && (
-				<div style={{ textAlign: "center", color: "var(--text-dim)", padding: "2rem" }}>
+				<div
+					style={{
+						textAlign: "center",
+						color: "var(--text-dim)",
+						padding: "2rem",
+					}}
+				>
 					No matches scheduled
 				</div>
 			)}

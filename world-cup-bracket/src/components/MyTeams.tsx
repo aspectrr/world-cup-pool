@@ -152,12 +152,18 @@ export function MyTeams({
 														{myScore} – {oppScore}
 													</span>
 												</div>
-											) : (
-												<div className="vs">MD{m.round}</div>
-											)}
-										</div>
-									);
-								})}
+								) : (
+									<div className="vs">
+										{m.date
+											? new Date(m.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+												" " +
+												new Date(m.date).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+											: `MD${m.round}`}
+									</div>
+								)}
+							</div>
+						);
+					})}
 							</div>
 						</div>
 					);
