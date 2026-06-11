@@ -361,39 +361,64 @@ img {
 	margin-bottom: 10px;
 	text-align: center;
 }
-.group-team-row {
+.group-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.78rem;
+}
+.group-table th {
+	text-align: left;
+	padding: 5px 6px;
+	color: var(--text-dim);
+	font-weight: 600;
+	font-size: 0.6rem;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.group-table td {
+	padding: 6px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.group-table .team-col {
+	width: 42%;
+}
+.group-table .team-cell {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	padding: 8px 10px;
-	font-size: 0.82rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-}
-.group-team-row:last-child {
-	border-bottom: none;
-}
-.group-team-row.advancing {
-	background: rgba(26, 138, 58, 0.1);
-	border-radius: 6px;
-}
-.group-team-row .team-cell {
-	display: flex;
-	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	font-weight: 600;
 }
-.group-team-row .team-cell img {
-	width: 22px;
-	height: 15px;
+.group-table .team-cell img {
+	width: 20px;
+	height: 14px;
 	object-fit: cover;
 	border-radius: 2px;
 }
+.group-table .num {
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+}
+.group-table .pts {
+	font-weight: 700;
+	color: var(--text);
+}
+.group-table tr.advancing td {
+	background: rgba(26, 138, 58, 0.08);
+}
+.group-table tr.advancing td.num {
+	color: var(--green);
+}
+.group-table tr.advancing .pts {
+	color: var(--green);
+}
 .group-owner {
-	font-size: 0.6rem;
+	font-size: 0.55rem;
 	color: var(--gold);
 	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
+	margin-left: auto;
+	white-space: nowrap;
 }
 
 /* ─── BRACKET VIEW ─── */
