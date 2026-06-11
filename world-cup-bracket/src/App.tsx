@@ -162,7 +162,7 @@ export default function App() {
 			{tab === "standings" && (
 				<Standings gMatches={gMatches} kMatches={kMatches} />
 			)}
-			{tab === "groups" && <GroupsView matches={gMatches} />}
+			{tab === "groups" && <GroupsView />}
 			{tab === "games" && <GamesView gMatches={gMatches} kMatches={kMatches} />}
 			{tab === "bracket" && (
 				<BracketView

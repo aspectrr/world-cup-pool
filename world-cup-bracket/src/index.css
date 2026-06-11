@@ -361,87 +361,39 @@ img {
 	margin-bottom: 10px;
 	text-align: center;
 }
-.group-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: 0.78rem;
-}
-.group-table th {
-	text-align: left;
-	padding: 4px 6px;
-	color: var(--text-dim);
-	font-weight: 600;
-	font-size: 0.65rem;
-	text-transform: uppercase;
-	letter-spacing: 1px;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-.group-table td {
-	padding: 5px 6px;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-}
-.group-table .team-cell {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-weight: 600;
-}
-.group-table .team-cell img {
-	width: 20px;
-	height: 14px;
-	object-fit: cover;
-	border-radius: 2px;
-}
-.group-table .num {
-	text-align: center;
-	font-variant-numeric: tabular-nums;
-	color: var(--text-dim);
-}
-.group-table .pts {
-	font-weight: 700;
-	color: var(--text);
-	text-align: center;
-}
-.group-table tr.advancing td {
-	color: var(--green);
-}
-.group-table tr.advancing .pts {
-	color: var(--green);
-}
-
-.group-matches {
-	margin-top: 10px;
-}
-.group-match-row {
+.group-team-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 4px 0;
-	font-size: 0.75rem;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+	padding: 8px 10px;
+	font-size: 0.82rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
-.group-match-row .teams {
+.group-team-row:last-child {
+	border-bottom: none;
+}
+.group-team-row.advancing {
+	background: rgba(26, 138, 58, 0.1);
+	border-radius: 6px;
+}
+.group-team-row .team-cell {
 	display: flex;
 	align-items: center;
-	gap: 6px;
-	flex: 1;
+	gap: 8px;
+	font-weight: 600;
 }
-.group-match-row .team-flag-sm {
-	width: 16px;
-	height: 11px;
+.group-team-row .team-cell img {
+	width: 22px;
+	height: 15px;
 	object-fit: cover;
 	border-radius: 2px;
 }
-.group-match-row .score {
-	font-variant-numeric: tabular-nums;
-	font-weight: 700;
-	min-width: 40px;
-	text-align: center;
-	color: var(--gold-light);
-}
-.group-match-row .vs {
-	color: var(--text-dim);
-	font-size: 0.65rem;
+.group-owner {
+	font-size: 0.6rem;
+	color: var(--gold);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
 }
 
 /* ─── BRACKET VIEW ─── */
