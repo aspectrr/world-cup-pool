@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { Tab, GroupMatch, KnockoutMatch } from "./types";
 import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
 import { GROUP_SCHEDULE } from "./data/schedule";
@@ -9,6 +9,27 @@ import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
 
+const HASH_MAP: Record<string, Tab> = {
+	"": "standings",
+	standings: "standings",
+	groups: "groups",
+	games: "games",
+	bracket: "bracket",
+	"my-teams": "my-teams",
+};
+const TAB_HASH: Record<Tab, string> = {
+	standings: "standings",
+	groups: "groups",
+	games: "games",
+	bracket: "bracket",
+	"my-teams": "my-teams",
+};
+
+function tabFromHash(): Tab {
+	const h = window.location.hash.replace("#", "");
+	return HASH_MAP[h] ?? "standings";
+}
+
 // Apply schedule dates to group matches
 const initGroupMatches = generateGroupMatches().map((m) => ({
 	...m,
@@ -17,7 +38,20 @@ const initGroupMatches = generateGroupMatches().map((m) => ({
 const initKnockoutMatches = generateKnockoutMatches();
 
 export default function App() {
-	const [tab, setTab] = useState<Tab>("standings");
+	const [tab, setTab] = useState<Tab>(tabFromHash);
+
+	// Sync tab → URL
+	const navigate = useCallback((t: Tab) => {
+		setTab(t);
+		window.location.hash = TAB_HASH[t];
+	}, []);
+
+	// Sync URL → tab (back/forward nav)
+	useEffect(() => {
+		const onHash = () => setTab(tabFromHash());
+		window.addEventListener("hashchange", onHash);
+		return () => window.removeEventListener("hashchange", onHash);
+	}, []);
 	const [gMatches, setGMatches] = useState<GroupMatch[]>(initGroupMatches);
 	const [kMatches, setKMatches] =
 		useState<KnockoutMatch[]>(initKnockoutMatches);
@@ -88,31 +122,31 @@ export default function App() {
 			<nav className="tabs">
 				<button
 					className={`tab-btn${tab === "standings" ? " active" : ""}`}
-					onClick={() => setTab("standings")}
+					onClick={() => navigate("standings")}
 				>
 					Standings
 				</button>
 				<button
 					className={`tab-btn${tab === "groups" ? " active" : ""}`}
-					onClick={() => setTab("groups")}
+					onClick={() => navigate("groups")}
 				>
 					Groups
 				</button>
 				<button
 					className={`tab-btn${tab === "games" ? " active" : ""}`}
-					onClick={() => setTab("games")}
+					onClick={() => navigate("games")}
 				>
 					Games
 				</button>
 				<button
 					className={`tab-btn${tab === "bracket" ? " active" : ""}`}
-					onClick={() => setTab("bracket")}
+					onClick={() => navigate("bracket")}
 				>
 					Bracket
 				</button>
 				<button
 					className={`tab-btn${tab === "my-teams" ? " active" : ""}`}
-					onClick={() => setTab("my-teams")}
+					onClick={() => navigate("my-teams")}
 				>
 					My Teams
 				</button>
