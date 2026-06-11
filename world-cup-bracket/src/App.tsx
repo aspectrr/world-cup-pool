@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Tab, GroupMatch, KnockoutMatch } from "./types";
 import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
+import { GROUP_SCHEDULE } from "./data/schedule";
 import { useESPNLive } from "./hooks/useESPNLive";
 import { Standings } from "./components/Standings";
 import { GroupsView } from "./components/GroupsView";
@@ -8,7 +9,11 @@ import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
 
-const initGroupMatches = generateGroupMatches();
+// Apply schedule dates to group matches
+const initGroupMatches = generateGroupMatches().map((m) => ({
+	...m,
+	date: GROUP_SCHEDULE[m.id],
+}));
 const initKnockoutMatches = generateKnockoutMatches();
 
 export default function App() {

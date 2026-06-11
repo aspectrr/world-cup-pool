@@ -50,7 +50,9 @@ function GameRow({ m }: { m: GameMatch }) {
 	const isFinished = m.status === "finished";
 
 	return (
-		<div className={`game-row${isLive ? " live" : ""}${isFinished ? " finished" : ""}`}>
+		<div
+			className={`game-row${isLive ? " live" : ""}${isFinished ? " finished" : ""}`}
+		>
 			<div className="game-teams">
 				<div className="game-team">
 					<div className="game-team-main">
@@ -112,6 +114,7 @@ export function GamesView({
 		const all: GameMatch[] = [];
 
 		for (const m of gMatches) {
+			if (!m.date) continue; // skip if no schedule date
 			all.push({
 				id: m.id,
 				date: m.date ?? "",
@@ -161,8 +164,13 @@ export function GamesView({
 		<div>
 			<div className="section-title">Game Schedule</div>
 			{Object.entries(gamesByDay).map(([day, games]) => (
-				<div key={day} className={`games-day${day === todayKey ? " today" : ""}`}>
-					<div className="games-day-header">{day === todayKey ? `📅 ${day} — Today` : day}</div>
+				<div
+					key={day}
+					className={`games-day${day === todayKey ? " today" : ""}`}
+				>
+					<div className="games-day-header">
+						{day === todayKey ? `📅 ${day} — Today` : day}
+					</div>
 					{games.map((g) => (
 						<GameRow key={g.id} m={g} />
 					))}
@@ -170,7 +178,7 @@ export function GamesView({
 			))}
 			{Object.keys(gamesByDay).length === 0 && (
 				<div style={{ textAlign: "center", color: "var(--text-dim)", padding: "2rem" }}>
-					Schedule loads from ESPN when tournament starts
+					No matches scheduled
 				</div>
 			)}
 		</div>
