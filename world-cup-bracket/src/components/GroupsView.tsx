@@ -119,15 +119,10 @@ export function GroupsView({ matches }: { matches: GroupMatch[] }) {
 											>
 												<td>
 													<div className="team-cell">
-														<img
-															src={flagUrl(team.code)}
-															alt={team.code}
-														/>
+														<img src={flagUrl(team.code)} alt={team.code} />
 														<span>{shortName(team.name)}</span>
 														{owner && (
-															<span className="group-owner">
-																{owner}
-															</span>
+															<span className="group-owner">{owner}</span>
 														)}
 													</div>
 												</td>
