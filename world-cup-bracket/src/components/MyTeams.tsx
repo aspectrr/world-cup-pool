@@ -1,12 +1,45 @@
 import { useState, useMemo } from "react";
-import type { GroupMatch, KnockoutMatch } from "../types";
-import { TEAMS, flagUrl } from "../data/teams";
+import type { GroupMatch, KnockoutMatch, GroupStanding } from "../types";
+import { TEAMS, GROUPS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
 import {
 	calcGroupStandings,
 	getAliveTeams,
 	getTeamStage,
 } from "../utils/standings";
+
+/** Always returns all teams per group with zeroes, filling in played stats */
+function alwaysStandings(gMatches: GroupMatch[]): Map<string, GroupStanding[]> {
+	const computed = calcGroupStandings(gMatches);
+	const result = new Map<string, GroupStanding[]>();
+
+	for (const group of GROUPS) {
+		const teams = TEAMS.map((t, i) => ({ ...t, idx: i }))
+			.filter((t) => t.group === group)
+			.sort((a, b) => a.groupPos - b.groupPos);
+
+		const computedGroup = computed.get(group) ?? [];
+		result.set(
+			group,
+			teams.map((t) => {
+				const found = computedGroup.find((s) => s.teamIdx === t.idx);
+				return (
+					found ?? {
+						teamIdx: t.idx,
+						played: 0,
+						won: 0,
+						drawn: 0,
+						lost: 0,
+						gf: 0,
+						ga: 0,
+						points: 0,
+					}
+				);
+			}),
+		);
+	}
+	return result;
+}
 
 export function MyTeams({
 	gMatches,
@@ -21,22 +54,39 @@ export function MyTeams({
 		() => getAliveTeams(gMatches, kMatches),
 		[gMatches, kMatches],
 	);
-	const standings = useMemo(() => calcGroupStandings(gMatches), [gMatches]);
+	const standings = useMemo(() => alwaysStandings(gMatches), [gMatches]);
+
+	const aliveCount = player.teamIndices.filter((t) => alive.has(t)).length;
 
 	return (
 		<div>
 			<div className="section-title">My Teams</div>
 
 			<div className="player-selector">
-				{PLAYERS.map((p, i) => (
-					<button
-						key={p.name}
-						className={`player-pill${i === selectedPlayer ? " active" : ""}`}
-						onClick={() => setSelectedPlayer(i)}
-					>
-						{p.name}
-					</button>
-				))}
+				{PLAYERS.map((p, i) => {
+					const pAlive = p.teamIndices.filter((t) => alive.has(t)).length;
+					return (
+						<button
+							key={p.name}
+							className={`player-pill${i === selectedPlayer ? " active" : ""}`}
+							onClick={() => setSelectedPlayer(i)}
+						>
+							{p.name}
+							<span className="pill-alive">{pAlive}/6</span>
+						</button>
+					);
+				})}
+			</div>
+
+			<div className="my-teams-summary">
+				<div className="summary-stat">
+					<span className="summary-val">{aliveCount}</span>
+					<span className="summary-label">Alive</span>
+				</div>
+				<div className="summary-stat">
+					<span className="summary-val">{6 - aliveCount}</span>
+					<span className="summary-label">Out</span>
+				</div>
 			</div>
 
 			<div className="my-teams-grid">
@@ -45,127 +95,124 @@ export function MyTeams({
 					const isAlive = alive.has(tIdx);
 					const stage = getTeamStage(tIdx, kMatches);
 
-					// Get this team's group matches
 					const teamGroupMatches = gMatches.filter(
 						(m) => m.homeIdx === tIdx || m.awayIdx === tIdx,
 					);
 
-					// Get group standing position
 					const groupStandings = standings.get(team.group) ?? [];
 					const pos = groupStandings.findIndex((s) => s.teamIdx === tIdx) + 1;
-					const standing = groupStandings.find((s) => s.teamIdx === tIdx);
+					const standing = groupStandings.find((s) => s.teamIdx === tIdx) ?? {
+						teamIdx: tIdx,
+						played: 0,
+						won: 0,
+						drawn: 0,
+						lost: 0,
+						gf: 0,
+						ga: 0,
+						points: 0,
+					};
 
 					return (
-						<div key={tIdx} className="my-team-card">
-							<div className="team-header">
-								<img src={flagUrl(team.code)} alt={team.code} />
-								<div>
-									<div className="team-name">{team.name}</div>
-									<div className="team-group">
-										Group {team.group} • Pos {pos || "–"} • FIFA #
-										{team.fifaRank}
+						<div
+							key={tIdx}
+							className={`my-team-card${!isAlive ? " eliminated-card" : ""}`}
+						>
+							<div className="mtc-header">
+								<div className="mtc-flag-wrap">
+									<img src={flagUrl(team.code)} alt={team.code} />
+								</div>
+								<div className="mtc-info">
+									<div className="mtc-name">{shortName(team.name)}</div>
+									<div className="mtc-meta">
+										Group {team.group} • FIFA #{team.fifaRank}
 									</div>
+								</div>
+								<div className="mtc-pos-badge">{pos ? `#${pos}` : "–"}</div>
+							</div>
+
+							<div className="mtc-stats-row">
+								<div className="mtc-stat">
+									<span className="mtc-stat-val">{standing.played}</span>
+									<span className="mtc-stat-lbl">P</span>
+								</div>
+								<div className="mtc-stat">
+									<span className="mtc-stat-val">{standing.won}</span>
+									<span className="mtc-stat-lbl">W</span>
+								</div>
+								<div className="mtc-stat">
+									<span className="mtc-stat-val">{standing.drawn}</span>
+									<span className="mtc-stat-lbl">D</span>
+								</div>
+								<div className="mtc-stat">
+									<span className="mtc-stat-val">{standing.lost}</span>
+									<span className="mtc-stat-lbl">L</span>
+								</div>
+								<div className="mtc-stat">
+									<span className="mtc-stat-val">
+										{standing.played > 0
+											? `${standing.gf - standing.ga > 0 ? "+" : ""}${standing.gf - standing.ga}`
+											: "0"}
+									</span>
+									<span className="mtc-stat-lbl">GD</span>
+								</div>
+								<div className="mtc-stat mtc-stat-pts">
+									<span className="mtc-stat-val">{standing.points}</span>
+									<span className="mtc-stat-lbl">Pts</span>
 								</div>
 							</div>
 
 							<span
-								className={`team-status ${isAlive ? "alive" : "eliminated"}`}
+								className={`mtc-status ${isAlive ? "alive" : "eliminated"}`}
 							>
 								{isAlive ? `Alive — ${stage.toUpperCase()}` : "Eliminated"}
 							</span>
 
-							{standing && (
-								<div
-									style={{
-										marginTop: 8,
-										fontSize: "0.72rem",
-										color: "var(--text-dim)",
-									}}
-								>
-									{standing.played}P {standing.won}W {standing.drawn}D{" "}
-									{standing.lost}L • {standing.points} pts
-									{standing.played > 0 &&
-										` (GD ${standing.gf - standing.ga > 0 ? "+" : ""}${standing.gf - standing.ga})`}
-								</div>
-							)}
-
-							<div className="team-matches">
+							<div className="mtc-matches">
 								{teamGroupMatches.map((m) => {
 									const opp = m.homeIdx === tIdx ? m.awayIdx : m.homeIdx;
 									const oppTeam = TEAMS[opp];
 									const isHome = m.homeIdx === tIdx;
 									const myScore = isHome ? m.homeScore : m.awayScore;
 									const oppScore = isHome ? m.awayScore : m.homeScore;
+									const isLive = m.status === "live";
 
 									return (
 										<div
 											key={m.id}
-											className={`group-match-row${m.status === "live" ? " live" : ""}`}
+											className={`mtc-match${isLive ? " live" : ""}${m.played ? " played" : ""}`}
 										>
-											<div className="teams">
+											<div className="mtc-match-opp">
 												<img
-													className="team-flag-sm"
+													className="mtc-match-flag"
 													src={flagUrl(oppTeam.code)}
 													alt={oppTeam.code}
 												/>
-												<span>vs {oppTeam.name}</span>
+												<span className="mtc-match-name">
+													{shortName(oppTeam.name)}
+												</span>
 											</div>
-											{m.status === "live" ? (
-												<div
-													style={{
-														display: "flex",
-														flexDirection: "column",
-														alignItems: "center",
-													}}
-												>
-													<div className="score">
-														<span
-															style={{
-																color:
-																	(myScore ?? 0) > (oppScore ?? 0)
-																		? "var(--green)"
-																		: (myScore ?? 0) < (oppScore ?? 0)
-																			? "var(--red)"
-																			: "var(--gold-light)",
-															}}
-														>
-															{myScore} – {oppScore}
-														</span>
-													</div>
-													<div className="match-live-clock">
-														<span className="match-live-dot" />
-														{m.clock}
-													</div>
-												</div>
-											) : m.played ? (
-												<div className="score">
+											{isLive ? (
+												<div className="mtc-match-score-col">
 													<span
-														style={{
-															color:
-																(myScore ?? 0) > (oppScore ?? 0)
-																	? "var(--green)"
-																	: (myScore ?? 0) < (oppScore ?? 0)
-																		? "var(--red)"
-																		: "var(--gold-light)",
-														}}
+														className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
 													>
 														{myScore} – {oppScore}
 													</span>
+													<span className="mtc-match-live">
+														<span className="match-live-dot" />
+														{m.clock}
+													</span>
 												</div>
+											) : m.played ? (
+												<span
+													className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
+												>
+													{myScore} – {oppScore}
+												</span>
 											) : (
-												<div className="vs">
-													{m.date
-														? new Date(m.date).toLocaleDateString("en-US", {
-																month: "short",
-																day: "numeric",
-															}) +
-															" " +
-															new Date(m.date).toLocaleTimeString("en-US", {
-																hour: "numeric",
-																minute: "2-digit",
-															})
-														: `MD${m.round}`}
-												</div>
+												<span className="mtc-match-date">
+													{m.date ? formatShort(m.date) : `MD${m.round}`}
+												</span>
 											)}
 										</div>
 									);
@@ -176,5 +223,24 @@ export function MyTeams({
 				})}
 			</div>
 		</div>
+	);
+}
+
+function resultClass(myScore: number | null, oppScore: number | null): string {
+	if (myScore === null || oppScore === null) return "";
+	if (myScore > oppScore) return "win";
+	if (myScore < oppScore) return "loss";
+	return "draw";
+}
+
+function formatShort(iso: string): string {
+	const d = new Date(iso);
+	return (
+		d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+		" " +
+		d.toLocaleTimeString("en-US", {
+			hour: "numeric",
+			minute: "2-digit",
+		})
 	);
 }
