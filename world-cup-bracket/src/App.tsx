@@ -3,6 +3,7 @@ import type { Tab, GroupMatch, KnockoutMatch } from "./types";
 import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
 import { GROUP_SCHEDULE } from "./data/schedule";
 import { useESPNLive } from "./hooks/useESPNLive";
+import type { ServerMatch } from "./hooks/useESPNLive";
 import { Standings } from "./components/Standings";
 import { GroupsView } from "./components/GroupsView";
 import { GamesView } from "./components/GamesView";
@@ -55,30 +56,33 @@ export default function App() {
 	const [gMatches, setGMatches] = useState<GroupMatch[]>(initGroupMatches);
 	const [kMatches, setKMatches] =
 		useState<KnockoutMatch[]>(initKnockoutMatches);
-	const live = useESPNLive(true);
+	const live = useESPNLive();
 
-	// Merge ESPN live data into group matches (source of truth)
+	// Merge server results into group matches
 	useEffect(() => {
 		if (live.matches.length === 0) return;
+
+		// Build lookup: "homeIdx v awayIdx" OR "awayIdx v homeIdx" → server match
+		const byTeams = new Map<string, ServerMatch>();
+		for (const sm of live.matches) {
+			byTeams.set(`${sm.home_idx}v${sm.away_idx}`, sm);
+			byTeams.set(`${sm.away_idx}v${sm.home_idx}`, sm);
+		}
 
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- syncing external API data via functional updater
 		setGMatches((prev) => {
 			let changed = false;
 			const updated = prev.map((m) => {
-				const espn = live.matches.find(
-					(e) =>
-						(e.homeIdx === m.homeIdx && e.awayIdx === m.awayIdx) ||
-						(e.homeIdx === m.awayIdx && e.awayIdx === m.homeIdx),
-				);
-				if (!espn) return m;
+				const sm = byTeams.get(`${m.homeIdx}v${m.awayIdx}`);
+				if (!sm) return m;
 
-				const isReversed = espn.homeIdx === m.awayIdx;
-				const homeScore = isReversed ? espn.awayScore : espn.homeScore;
-				const awayScore = isReversed ? espn.homeScore : espn.awayScore;
-				const played = espn.status === "finished";
+				const isReversed = sm.home_idx === m.awayIdx;
+				const homeScore = isReversed ? sm.away_score : sm.home_score;
+				const awayScore = isReversed ? sm.home_score : sm.away_score;
+				const played = sm.status === "finished" || sm.status === "live";
 
 				if (
-					m.status === espn.status &&
+					m.status === sm.status &&
 					m.played === played &&
 					m.homeScore === homeScore &&
 					m.awayScore === awayScore
@@ -92,9 +96,9 @@ export default function App() {
 					homeScore,
 					awayScore,
 					played,
-					status: espn.status,
-					clock: espn.clock,
-					date: espn.date,
+					status: sm.status,
+					clock: sm.clock,
+					date: sm.date,
 				};
 			});
 
