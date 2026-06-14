@@ -26,7 +26,7 @@ const ESPN_ABBR_TO_IDX: Record<string, number> = {
 };
 
 const ESPN_ALT_ABBR: Record<string, string> = {
-	TCH: "CZE", IVC: "CIV", CGO: "COD", SAU: "KSA",
+	TCH: "CZE", IVC: "CIV", CGO: "COD", SAU: "KSA", CUW: "CUR",
 };
 
 function resolveIdx(abbr: string): number | null {
