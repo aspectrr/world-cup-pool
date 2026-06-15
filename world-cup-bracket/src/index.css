@@ -785,6 +785,118 @@ img {
 .games-day.today .games-day-header {
 	color: var(--gold-light);
 }
+
+/* ─── DATE PICKER BAR ─── */
+.games-date-bar {
+	display: flex;
+	align-items: stretch;
+	gap: 6px;
+	background: var(--card);
+	border-radius: 12px;
+	padding: 6px;
+	margin-bottom: 16px;
+	box-shadow: var(--shadow-card);
+}
+.games-date-arrow {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	border: none;
+	background: transparent;
+	color: var(--text-dim);
+	font-size: 1.3rem;
+	font-weight: 700;
+	cursor: pointer;
+	border-radius: 8px;
+	transition:
+		background 0.15s,
+		color 0.15s;
+}
+.games-date-arrow:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.06);
+	color: var(--gold-light);
+}
+.games-date-arrow:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+.games-date-strip {
+	flex: 1;
+	display: flex;
+	gap: 6px;
+	overflow-x: auto;
+	scroll-behavior: smooth;
+	scrollbar-width: none;
+	padding: 2px 0;
+}
+.games-date-strip::-webkit-scrollbar {
+	display: none;
+}
+.games-date-chip {
+	position: relative;
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-width: 56px;
+	padding: 6px 10px;
+	border: 1px solid var(--card-border);
+	background: transparent;
+	border-radius: 10px;
+	cursor: pointer;
+	font-family: "Oswald", sans-serif;
+	line-height: 1.1;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		color 0.15s;
+}
+.games-date-chip:hover {
+	border-color: rgba(255, 255, 255, 0.2);
+	background: rgba(255, 255, 255, 0.04);
+}
+.games-date-chip-weekday {
+	font-size: 0.58rem;
+	font-weight: 600;
+	letter-spacing: 1px;
+	color: var(--text-dim);
+	text-transform: uppercase;
+}
+.games-date-chip-date {
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: var(--text);
+	white-space: nowrap;
+}
+.games-date-chip.active {
+	background: var(--gold);
+	border-color: var(--gold);
+}
+.games-date-chip.active .games-date-chip-weekday,
+.games-date-chip.active .games-date-chip-date {
+	color: var(--bg);
+}
+.games-date-chip.today:not(.active) {
+	border-color: var(--gold);
+}
+.games-date-chip.today:not(.active) .games-date-chip-weekday {
+	color: var(--gold);
+}
+.games-date-chip-dot {
+	position: absolute;
+	top: 4px;
+	right: 5px;
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--gold-light);
+}
+.games-date-chip.active .games-date-chip-dot {
+	background: var(--bg);
+}
 .game-row {
 	display: flex;
 	align-items: center;
