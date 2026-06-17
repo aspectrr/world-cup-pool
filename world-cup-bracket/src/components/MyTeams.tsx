@@ -153,9 +153,7 @@ export function MyTeams({
 									<img src={flagUrl(team.code)} alt={team.code} />
 								</div>
 								<div className="mtc-info">
-									<div
-										className={`mtc-name${isAdvancing ? " advancing" : ""}`}
-									>
+									<div className={`mtc-name${isAdvancing ? " advancing" : ""}`}>
 										{shortName(team.name)}
 									</div>
 									<div className="mtc-meta">
@@ -327,9 +325,7 @@ function statusTextFor(
 			case "clinched":
 				return "✓ Clinched Top 2";
 			case "bubble":
-				return isAdvancing
-					? "✓ Advancing (Best 3rd)"
-					: "✗ Outside Best 3rd";
+				return isAdvancing ? "✓ Advancing (Best 3rd)" : "✗ Outside Best 3rd";
 			case "atRisk":
 				return "⚠ At Risk";
 			case "eliminated":

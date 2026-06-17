@@ -81,7 +81,13 @@ function buildStandings(matches: GroupMatch[]): Map<string, GroupStanding[]> {
 	return map;
 }
 
-export function GroupsView({ matches }: { matches: GroupMatch[] }) {
+export function GroupsView({
+	matches,
+	advancing,
+}: {
+	matches: GroupMatch[];
+	advancing: Set<number>;
+}) {
 	const standings = buildStandings(matches);
 
 	return (
@@ -111,16 +117,25 @@ export function GroupsView({ matches }: { matches: GroupMatch[] }) {
 									{groupStandings.map((s, i) => {
 										const team = TEAMS[s.teamIdx];
 										const owner = teamOwner(s.teamIdx);
-										const advancing = i < 2;
+										const isTop2 = i < 2;
+										const isBestThird = advancing.has(s.teamIdx);
+										const rowClass = isTop2
+											? "advancing"
+											: isBestThird
+												? "advancing-third"
+												: "";
 										return (
 											<tr
 												key={s.teamIdx}
-												className={advancing ? "advancing" : ""}
+												className={rowClass}
 											>
 												<td>
 													<div className="team-cell">
 														<img src={flagUrl(team.code)} alt={team.code} />
 														<span>{shortName(team.name)}</span>
+														{isBestThird && !isTop2 && (
+															<span className="third-marker">3rd</span>
+														)}
 														{owner && (
 															<span className="group-owner">{owner}</span>
 														)}

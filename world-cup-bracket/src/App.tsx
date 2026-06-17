@@ -184,13 +184,11 @@ export default function App() {
 			{effectiveTab === "standings" && (
 				<Standings gMatches={gMatches} kMatches={kMatches} />
 			)}
-			{effectiveTab === "groups" && <GroupsView matches={gMatches} />}
+			{effectiveTab === "groups" && (
+				<GroupsView matches={gMatches} advancing={advancing} />
+			)}
 			{effectiveTab === "games" && (
-				<GamesView
-					gMatches={gMatches}
-					kMatches={kMatches}
-					advancing={advancing}
-				/>
+				<GamesView gMatches={gMatches} kMatches={kMatches} />
 			)}
 			{effectiveTab === "bracket" && (
 				<BracketView

@@ -415,6 +415,25 @@ img {
 .group-table tr.advancing .pts {
 	color: var(--green);
 }
+.group-table tr.advancing-third td {
+	background: rgba(26, 138, 58, 0.04);
+}
+.group-table tr.advancing-third td.num {
+	color: var(--green);
+}
+.group-table tr.advancing-third .pts {
+	color: var(--green);
+}
+.third-marker {
+	font-size: 0.5rem;
+	color: var(--green);
+	background: rgba(26, 138, 58, 0.15);
+	padding: 1px 4px;
+	border-radius: 3px;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	margin-left: 4px;
+}
 .group-owner {
 	font-size: 0.55rem;
 	color: var(--gold);
@@ -989,9 +1008,6 @@ img {
 .game-team-name {
 	font-size: 0.82rem;
 	font-weight: 600;
-}
-.game-team-name.advancing {
-	color: var(--green);
 }
 .game-owner {
 	font-size: 0.6rem;
