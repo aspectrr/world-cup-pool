@@ -213,21 +213,40 @@ export function MyTeams({
 											key={m.id}
 											className={`mtc-match${isLive ? " live" : ""}${m.played ? " played" : ""}`}
 										>
-											{/* Left: my team's score (or date if unplayed) */}
-											<div className="mtc-match-left">
-												{m.played || isLive ? (
+											{/* Left: my team — flag over name */}
+											<div className="mtc-match-side">
+												<img
+													className="mtc-match-flag"
+													src={flagUrl(team.code)}
+													alt={team.code}
+												/>
+												<span className="mtc-match-name">
+													{shortName(team.name, 11)}
+												</span>
+											</div>
+
+											{/* Center: status + score */}
+											<div className="mtc-match-center">
+												{isLive ? (
 													<>
+														<span className="mtc-match-status">
+															<span className="match-live-dot" />
+															{m.clock}
+														</span>
 														<span
 															className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
 														>
-															{myScore}
+															{myScore} – {oppScore}
 														</span>
-														{isLive && (
-															<span className="mtc-match-live">
-																<span className="match-live-dot" />
-																{m.clock}
-															</span>
-														)}
+													</>
+												) : m.played ? (
+													<>
+														<span className="mtc-match-status ft">FT</span>
+														<span
+															className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
+														>
+															{myScore} – {oppScore}
+														</span>
 													</>
 												) : (
 													<span className="mtc-match-date">
@@ -236,25 +255,16 @@ export function MyTeams({
 												)}
 											</div>
 
-											{/* Center: opponent name */}
-											<span className="mtc-match-name">
-												{shortName(oppTeam.name)}
-											</span>
-
-											{/* Right: opponent score + flag */}
-											<div className="mtc-match-right">
-												{m.played || isLive ? (
-													<span
-														className={`mtc-match-score ${resultClass(oppScore, myScore)}`}
-													>
-														{oppScore}
-													</span>
-												) : null}
+											{/* Right: opponent — flag over name */}
+											<div className="mtc-match-side">
 												<img
 													className="mtc-match-flag"
 													src={flagUrl(oppTeam.code)}
 													alt={oppTeam.code}
 												/>
+												<span className="mtc-match-name">
+													{shortName(oppTeam.name, 11)}
+												</span>
 											</div>
 										</div>
 									);
