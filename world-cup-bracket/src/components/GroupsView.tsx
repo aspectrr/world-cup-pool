@@ -117,22 +117,16 @@ export function GroupsView({
 									{groupStandings.map((s, i) => {
 										const team = TEAMS[s.teamIdx];
 										const owner = teamOwner(s.teamIdx);
-										const isTop2 = i < 2;
-										const isBestThird = advancing.has(s.teamIdx);
-										const rowClass = isTop2
-											? "advancing"
-											: isBestThird
-												? "advancing-third"
-												: "";
+										const isAdvancing = i < 2 || advancing.has(s.teamIdx);
 										return (
-											<tr key={s.teamIdx} className={rowClass}>
+											<tr
+												key={s.teamIdx}
+												className={isAdvancing ? "advancing" : ""}
+											>
 												<td>
 													<div className="team-cell">
 														<img src={flagUrl(team.code)} alt={team.code} />
 														<span>{shortName(team.name)}</span>
-														{isBestThird && !isTop2 && (
-															<span className="third-marker">3rd</span>
-														)}
 														{owner && (
 															<span className="group-owner">{owner}</span>
 														)}
