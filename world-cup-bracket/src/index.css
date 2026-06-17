@@ -623,9 +623,6 @@ img {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.mtc-name.advancing {
-	color: var(--green);
-}
 .mtc-meta {
 	font-size: 0.68rem;
 	color: var(--text-dim);
@@ -692,6 +689,18 @@ img {
 }
 .mtc-stat-pts .mtc-stat-val {
 	color: var(--gold-light);
+}
+.mtc-stats-row.advancing .mtc-stat-val {
+	color: var(--green);
+}
+.mtc-stats-row.advancing .mtc-stat-pts .mtc-stat-val {
+	color: var(--green);
+}
+.mtc-stats-row.not-advancing .mtc-stat-val {
+	color: var(--red);
+}
+.mtc-stats-row.not-advancing .mtc-stat-pts .mtc-stat-val {
+	color: var(--red);
 }
 
 .mtc-status {

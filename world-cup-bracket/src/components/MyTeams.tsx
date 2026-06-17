@@ -153,9 +153,7 @@ export function MyTeams({
 									<img src={flagUrl(team.code)} alt={team.code} />
 								</div>
 								<div className="mtc-info">
-									<div className={`mtc-name${isAdvancing ? " advancing" : ""}`}>
-										{shortName(team.name)}
-									</div>
+									<div className="mtc-name">{shortName(team.name)}</div>
 									<div className="mtc-meta">
 										Group {team.group} • FIFA #{team.fifaRank}
 									</div>
@@ -167,7 +165,9 @@ export function MyTeams({
 								</div>
 							</div>
 
-							<div className="mtc-stats-row">
+							<div
+								className={`mtc-stats-row${inGroupStage ? (isAdvancing ? " advancing" : " not-advancing") : ""}`}
+							>
 								<div className="mtc-stat">
 									<span className="mtc-stat-val">{standing.played}</span>
 									<span className="mtc-stat-lbl">P</span>
@@ -323,7 +323,7 @@ function statusTextFor(
 			case "clinched":
 				return "✓ Clinched Top 2";
 			case "bubble":
-				return "⚠ At Risk (Best 3rd)";
+				return "⚠ At Risk";
 			case "atRisk":
 				return "⚠ At Risk";
 			case "eliminated":
