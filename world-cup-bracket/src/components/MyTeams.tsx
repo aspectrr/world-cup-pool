@@ -19,24 +19,35 @@ function alwaysStandings(gMatches: GroupMatch[]): Map<string, GroupStanding[]> {
 			.sort((a, b) => a.groupPos - b.groupPos);
 
 		const computedGroup = computed.get(group) ?? [];
-		result.set(
-			group,
-			teams.map((t) => {
-				const found = computedGroup.find((s) => s.teamIdx === t.idx);
-				return (
-					found ?? {
-						teamIdx: t.idx,
-						played: 0,
-						won: 0,
-						drawn: 0,
-						lost: 0,
-						gf: 0,
-						ga: 0,
-						points: 0,
-					}
-				);
-			}),
-		);
+		const filled = teams.map((t) => {
+			const found = computedGroup.find((s) => s.teamIdx === t.idx);
+			return (
+				found ?? {
+					teamIdx: t.idx,
+					played: 0,
+					won: 0,
+					drawn: 0,
+					lost: 0,
+					gf: 0,
+					ga: 0,
+					points: 0,
+				}
+			);
+		});
+
+		// Rank by current group performance (points, GD, GF),
+		// tie-break by preset groupPos for determinism before games are played.
+		filled.sort((a, b) => {
+			if (b.points !== a.points) return b.points - a.points;
+			const gdA = a.gf - a.ga;
+			const gdB = b.gf - b.ga;
+			if (gdB !== gdA) return gdB - gdA;
+			if (b.gf !== a.gf) return b.gf - a.gf;
+			const posA = TEAMS[a.teamIdx].groupPos;
+			const posB = TEAMS[b.teamIdx].groupPos;
+			return posA - posB;
+		});
+		result.set(group, filled);
 	}
 	return result;
 }
