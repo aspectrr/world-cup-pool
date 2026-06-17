@@ -643,19 +643,11 @@ img {
 	justify-content: center;
 	flex-shrink: 0;
 }
-.mtc-pos-badge.clinched {
+.mtc-pos-badge.advancing {
 	color: var(--green);
 	background: rgba(26, 138, 58, 0.18);
 }
-.mtc-pos-badge.bubble {
-	color: var(--amber);
-	background: rgba(217, 119, 6, 0.18);
-}
-.mtc-pos-badge.atRisk {
-	color: var(--yellow);
-	background: rgba(202, 138, 4, 0.18);
-}
-.mtc-pos-badge.eliminated {
+.mtc-pos-badge.not-advancing {
 	color: var(--red);
 	background: rgba(196, 30, 58, 0.18);
 }
@@ -689,18 +681,6 @@ img {
 }
 .mtc-stat-pts .mtc-stat-val {
 	color: var(--gold-light);
-}
-.mtc-stats-row.advancing .mtc-stat-val {
-	color: var(--green);
-}
-.mtc-stats-row.advancing .mtc-stat-pts .mtc-stat-val {
-	color: var(--green);
-}
-.mtc-stats-row.not-advancing .mtc-stat-val {
-	color: var(--red);
-}
-.mtc-stats-row.not-advancing .mtc-stat-pts .mtc-stat-val {
-	color: var(--red);
 }
 
 .mtc-status {

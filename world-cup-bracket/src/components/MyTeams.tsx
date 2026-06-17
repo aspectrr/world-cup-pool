@@ -159,15 +159,13 @@ export function MyTeams({
 									</div>
 								</div>
 								<div
-									className={`mtc-pos-badge${posBadgeClass(advStatus, isAdvancing)}`}
+									className={`mtc-pos-badge${posBadgeClass(inGroupStage, isAdvancing)}`}
 								>
 									{pos ? `#${pos}` : "–"}
 								</div>
 							</div>
 
-							<div
-								className={`mtc-stats-row${inGroupStage ? (isAdvancing ? " advancing" : " not-advancing") : ""}`}
-							>
+							<div className="mtc-stats-row">
 								<div className="mtc-stat">
 									<span className="mtc-stat-val">{standing.played}</span>
 									<span className="mtc-stat-lbl">P</span>
@@ -305,12 +303,11 @@ function statusClassFor(
 }
 
 function posBadgeClass(
-	advStatus: AdvancementStatus | null,
+	inGroupStage: boolean,
 	isAdvancing: boolean,
 ): string {
-	if (advStatus === "bubble") return isAdvancing ? " clinched" : " eliminated";
-	if (advStatus) return ` ${advStatus}`;
-	return "";
+	if (!inGroupStage) return "";
+	return isAdvancing ? " advancing" : " not-advancing";
 }
 
 function statusTextFor(
