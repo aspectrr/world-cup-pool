@@ -213,39 +213,49 @@ export function MyTeams({
 											key={m.id}
 											className={`mtc-match${isLive ? " live" : ""}${m.played ? " played" : ""}`}
 										>
-											<div className="mtc-match-opp">
+											{/* Left: my team's score (or date if unplayed) */}
+											<div className="mtc-match-left">
+												{m.played || isLive ? (
+													<>
+														<span
+															className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
+														>
+															{myScore}
+														</span>
+														{isLive && (
+															<span className="mtc-match-live">
+																<span className="match-live-dot" />
+																{m.clock}
+															</span>
+														)}
+													</>
+												) : (
+													<span className="mtc-match-date">
+														{m.date ? formatShort(m.date) : `MD${m.round}`}
+													</span>
+												)}
+											</div>
+
+											{/* Center: opponent name */}
+											<span className="mtc-match-name">
+												{shortName(oppTeam.name)}
+											</span>
+
+											{/* Right: opponent score + flag */}
+											<div className="mtc-match-right">
+												{m.played || isLive ? (
+													<span
+														className={`mtc-match-score ${resultClass(oppScore, myScore)}`}
+													>
+														{oppScore}
+													</span>
+												) : null}
 												<img
 													className="mtc-match-flag"
 													src={flagUrl(oppTeam.code)}
 													alt={oppTeam.code}
 												/>
-												<span className="mtc-match-name">
-													{shortName(oppTeam.name)}
-												</span>
 											</div>
-											{isLive ? (
-												<div className="mtc-match-score-col">
-													<span
-														className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
-													>
-														{myScore} – {oppScore}
-													</span>
-													<span className="mtc-match-live">
-														<span className="match-live-dot" />
-														{m.clock}
-													</span>
-												</div>
-											) : m.played ? (
-												<span
-													className={`mtc-match-score ${resultClass(myScore, oppScore)}`}
-												>
-													{myScore} – {oppScore}
-												</span>
-											) : (
-												<span className="mtc-match-date">
-													{m.date ? formatShort(m.date) : `MD${m.round}`}
-												</span>
-											)}
 										</div>
 									);
 								})}

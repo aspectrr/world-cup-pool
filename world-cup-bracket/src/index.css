@@ -747,22 +747,29 @@ img {
 	align-items: center;
 	gap: 6px;
 }
+.mtc-match-left {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	min-width: 36px;
+}
+.mtc-match-right {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.mtc-match-name {
+	flex: 1;
+	text-align: center;
+	color: var(--text-dim);
+	font-weight: 500;
+}
 .mtc-match-flag {
 	width: 18px;
 	height: 12px;
 	object-fit: cover;
 	border-radius: 2px;
-}
-.mtc-match-name {
-	font-weight: 500;
-}
-.mtc-match-venue {
-	font-size: 0.55rem;
-	color: var(--text-dim);
-	background: rgba(255, 255, 255, 0.05);
-	padding: 1px 4px;
-	border-radius: 3px;
-	font-weight: 600;
 }
 .mtc-match-score {
 	font-variant-numeric: tabular-nums;
@@ -776,12 +783,6 @@ img {
 }
 .mtc-match-score.draw {
 	color: var(--gold-light);
-}
-.mtc-match-score-col {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 2px;
 }
 .mtc-match-live {
 	display: flex;
