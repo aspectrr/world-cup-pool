@@ -6,6 +6,8 @@ import {
 	calcGroupStandings,
 	getAliveTeams,
 	getTeamStage,
+	getGroupAdvancementStatus,
+	type AdvancementStatus,
 } from "../utils/standings";
 
 /** Always returns all teams per group with zeroes, filling in played stats */
@@ -123,6 +125,12 @@ export function MyTeams({
 						points: 0,
 					};
 
+					// Group advancement status (only meaningful during group stage)
+					const inGroupStage = stage === "group";
+					const advStatus: AdvancementStatus | null = inGroupStage
+						? getGroupAdvancementStatus(tIdx, gMatches)
+						: null;
+
 					return (
 						<div
 							key={tIdx}
@@ -138,7 +146,11 @@ export function MyTeams({
 										Group {team.group} • FIFA #{team.fifaRank}
 									</div>
 								</div>
-								<div className="mtc-pos-badge">{pos ? `#${pos}` : "–"}</div>
+								<div
+									className={`mtc-pos-badge${advStatus ? ` ${advStatus}` : ""}`}
+								>
+									{pos ? `#${pos}` : "–"}
+								</div>
 							</div>
 
 							<div className="mtc-stats-row">
@@ -173,11 +185,9 @@ export function MyTeams({
 							</div>
 
 							<span
-								className={`mtc-status ${isAlive ? "alive" : "eliminated"}`}
+								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage)}`}
 							>
-								{isAlive
-									? `Alive — ${stage.toUpperCase()} STAGE`
-									: "Eliminated"}
+								{statusTextFor(advStatus, isAlive, stage)}
 							</span>
 
 							<div className="mtc-matches">
@@ -244,6 +254,41 @@ function resultClass(myScore: number | null, oppScore: number | null): string {
 	if (myScore > oppScore) return "win";
 	if (myScore < oppScore) return "loss";
 	return "draw";
+}
+
+type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
+
+function statusClassFor(
+	advStatus: AdvancementStatus | null,
+	isAlive: boolean,
+	stage: Stage,
+): string {
+	if (advStatus) return advStatus;
+	if (!isAlive) return "eliminated";
+	if (stage !== "group") return "alive";
+	return "alive";
+}
+
+function statusTextFor(
+	advStatus: AdvancementStatus | null,
+	isAlive: boolean,
+	stage: Stage,
+): string {
+	if (advStatus) {
+		switch (advStatus) {
+			case "clinched":
+				return "✓ Clinched Top 2";
+			case "bubble":
+				return "Bubble — Best 3rd Race";
+			case "atRisk":
+				return "⚠ At Risk";
+			case "eliminated":
+				return "Eliminated";
+		}
+	}
+	if (!isAlive) return "Eliminated";
+	if (stage !== "group") return `Alive — ${stage.toUpperCase()} STAGE`;
+	return "Alive — GROUP STAGE";
 }
 
 function formatShort(iso: string): string {

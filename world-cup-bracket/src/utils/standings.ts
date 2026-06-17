@@ -1,6 +1,16 @@
 import type { GroupMatch, GroupStanding } from "../types";
 import { TEAMS } from "../data/teams";
 
+/** Compare two standings rows: points, GD, GF, then preset groupPos */
+function compareStandings(a: GroupStanding, b: GroupStanding): number {
+	if (b.points !== a.points) return b.points - a.points;
+	const gdA = a.gf - a.ga;
+	const gdB = b.gf - b.ga;
+	if (gdB !== gdA) return gdB - gdA;
+	if (b.gf !== a.gf) return b.gf - a.gf;
+	return TEAMS[a.teamIdx].groupPos - TEAMS[b.teamIdx].groupPos;
+}
+
 /** Calculate group standings from played matches */
 export function calcGroupStandings(
 	matches: GroupMatch[],
@@ -62,15 +72,9 @@ export function calcGroupStandings(
 		}
 	}
 
-	// Sort each group: points, GD, GF
+	// Sort each group: points, GD, GF, then preset groupPos
 	for (const [, standings] of map) {
-		standings.sort((a, b) => {
-			if (b.points !== a.points) return b.points - a.points;
-			const gdA = a.gf - a.ga;
-			const gdB = b.gf - b.ga;
-			if (gdB !== gdA) return gdB - gdA;
-			return b.gf - a.gf;
-		});
+		standings.sort(compareStandings);
 	}
 
 	return map;
@@ -178,4 +182,90 @@ export function getTeamStage(
 	}
 
 	return furthest;
+}
+
+export type AdvancementStatus = "clinched" | "bubble" | "atRisk" | "eliminated";
+
+// Possible simulated scorelines for an unplayed match: home win / draw / away win
+const SIM_OUTCOMES: Array<[number, number]> = [
+	[2, 0],
+	[1, 1],
+	[0, 2],
+];
+
+/**
+ * Deterministic group advancement status for a team.
+ *
+ * Enumerates every outcome (3^N) of the group's remaining matches and derives:
+ * - clinched: finishes top-2 in every scenario
+ * - eliminated: best possible finish is 4th (no best-3rd shot either)
+ * - bubble: currently sitting 3rd (best-3rd race)
+ * - atRisk: everything else (could climb or drop)
+ *
+ * Strict top-2 model — does not simulate cross-group best-3rd comparison.
+ */
+export function getGroupAdvancementStatus(
+	teamIdx: number,
+	gMatches: GroupMatch[],
+): AdvancementStatus {
+	const team = TEAMS[teamIdx];
+	const groupTeams = TEAMS.map((t, i) => ({ ...t, idx: i }))
+		.filter((t) => t.group === team.group)
+		.map((t) => t.idx);
+
+	const groupMatches = gMatches.filter((m) => m.group === team.group);
+	const played = groupMatches.filter(
+		(m) => m.played && m.homeScore !== null && m.awayScore !== null,
+	);
+	const remaining = groupMatches.filter((m) => !m.played);
+
+	const zero = (idx: number): GroupStanding => ({
+		teamIdx: idx,
+		played: 0,
+		won: 0,
+		drawn: 0,
+		lost: 0,
+		gf: 0,
+		ga: 0,
+		points: 0,
+	});
+
+	// Current live position (with zero-fill for unplayed teams)
+	const currentMap = calcGroupStandings(played).get(team.group) ?? [];
+	const currentList = groupTeams.map(
+		(idx) => currentMap.find((s) => s.teamIdx === idx) ?? zero(idx),
+	);
+	const currentPos =
+		[...currentList]
+			.sort(compareStandings)
+			.findIndex((s) => s.teamIdx === teamIdx) + 1;
+
+	// Enumerate all remaining-match outcomes (3^N permutations)
+	const n = remaining.length;
+	const totalPerms = Math.pow(3, n);
+
+	let alwaysTop2 = true;
+	let bestPos = 4;
+
+	for (let p = 0; p < totalPerms; p++) {
+		const simMatches = [...played];
+		let tmp = p;
+		for (let i = 0; i < n; i++) {
+			const [hs, as] = SIM_OUTCOMES[tmp % 3];
+			tmp = Math.floor(tmp / 3);
+			const m = remaining[i];
+			simMatches.push({ ...m, played: true, homeScore: hs, awayScore: as });
+		}
+
+		const finalList = calcGroupStandings(simMatches).get(team.group) ?? [];
+		const pos = finalList.findIndex((s) => s.teamIdx === teamIdx) + 1;
+
+		if (pos > 2) alwaysTop2 = false;
+		if (pos < bestPos) bestPos = pos;
+	}
+
+	if (alwaysTop2) return "clinched";
+	if (bestPos === 4) return "eliminated";
+	if (currentPos === 3) return "bubble";
+	return "atRisk";
 }

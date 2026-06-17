@@ -108,6 +108,15 @@ export default function App() {
 
 	const liveCount = gMatches.filter((m) => m.status === "live").length;
 
+	// Group stage is over once every group match has been played
+	const groupStageDone =
+		gMatches.length > 0 && gMatches.every((m) => m.played);
+
+	// If user lands on (or navigates to) the bracket tab before the group
+	// stage is finished, treat them as on standings.
+	const effectiveTab: Tab =
+		!groupStageDone && tab === "bracket" ? "standings" : tab;
+
 	return (
 		<div className="app">
 			<header className="header">
@@ -125,31 +134,33 @@ export default function App() {
 
 			<nav className="tabs">
 				<button
-					className={`tab-btn${tab === "standings" ? " active" : ""}`}
+					className={`tab-btn${effectiveTab === "standings" ? " active" : ""}`}
 					onClick={() => navigate("standings")}
 				>
 					Standings
 				</button>
 				<button
-					className={`tab-btn${tab === "groups" ? " active" : ""}`}
+					className={`tab-btn${effectiveTab === "groups" ? " active" : ""}`}
 					onClick={() => navigate("groups")}
 				>
 					Groups
 				</button>
 				<button
-					className={`tab-btn${tab === "games" ? " active" : ""}`}
+					className={`tab-btn${effectiveTab === "games" ? " active" : ""}`}
 					onClick={() => navigate("games")}
 				>
 					Games
 				</button>
+				{groupStageDone && (
+					<button
+						className={`tab-btn${effectiveTab === "bracket" ? " active" : ""}`}
+						onClick={() => navigate("bracket")}
+					>
+						Bracket
+					</button>
+				)}
 				<button
-					className={`tab-btn${tab === "bracket" ? " active" : ""}`}
-					onClick={() => navigate("bracket")}
-				>
-					Bracket
-				</button>
-				<button
-					className={`tab-btn${tab === "my-teams" ? " active" : ""}`}
+					className={`tab-btn${effectiveTab === "my-teams" ? " active" : ""}`}
 					onClick={() => navigate("my-teams")}
 				>
 					My Teams
@@ -163,19 +174,21 @@ export default function App() {
 				</div>
 			)}
 
-			{tab === "standings" && (
+			{effectiveTab === "standings" && (
 				<Standings gMatches={gMatches} kMatches={kMatches} />
 			)}
-			{tab === "groups" && <GroupsView matches={gMatches} />}
-			{tab === "games" && <GamesView gMatches={gMatches} kMatches={kMatches} />}
-			{tab === "bracket" && (
+			{effectiveTab === "groups" && <GroupsView matches={gMatches} />}
+			{effectiveTab === "games" && (
+				<GamesView gMatches={gMatches} kMatches={kMatches} />
+			)}
+			{effectiveTab === "bracket" && (
 				<BracketView
 					matches={kMatches}
 					setMatches={setKMatches}
 					gMatches={gMatches}
 				/>
 			)}
-			{tab === "my-teams" && (
+			{effectiveTab === "my-teams" && (
 				<MyTeams gMatches={gMatches} kMatches={kMatches} />
 			)}
 		</div>

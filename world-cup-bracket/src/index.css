@@ -6,6 +6,8 @@
 	--green: #1a8a3a;
 	--green-dark: #0f5a24;
 	--red: #c41e3a;
+	--amber: #d97706;
+	--yellow: #ca8a04;
 	--text: #f0f0f0;
 	--text-dim: #8a94a6;
 	--card: rgba(255, 255, 255, 0.04);
@@ -641,6 +643,22 @@ img {
 	justify-content: center;
 	flex-shrink: 0;
 }
+.mtc-pos-badge.clinched {
+	color: var(--green);
+	background: rgba(26, 138, 58, 0.18);
+}
+.mtc-pos-badge.bubble {
+	color: var(--amber);
+	background: rgba(217, 119, 6, 0.18);
+}
+.mtc-pos-badge.atRisk {
+	color: var(--yellow);
+	background: rgba(202, 138, 4, 0.18);
+}
+.mtc-pos-badge.eliminated {
+	color: var(--red);
+	background: rgba(196, 30, 58, 0.18);
+}
 
 .mtc-stats-row {
 	display: flex;
@@ -686,6 +704,18 @@ img {
 .mtc-status.alive {
 	background: rgba(26, 138, 58, 0.15);
 	color: var(--green);
+}
+.mtc-status.clinched {
+	background: rgba(26, 138, 58, 0.15);
+	color: var(--green);
+}
+.mtc-status.bubble {
+	background: rgba(217, 119, 6, 0.15);
+	color: var(--amber);
+}
+.mtc-status.atRisk {
+	background: rgba(202, 138, 4, 0.15);
+	color: var(--yellow);
 }
 .mtc-status.eliminated {
 	background: rgba(196, 30, 58, 0.15);
