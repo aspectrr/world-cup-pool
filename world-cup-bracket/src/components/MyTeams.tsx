@@ -61,7 +61,16 @@ export function MyTeams({
 	gMatches: GroupMatch[];
 	kMatches: KnockoutMatch[];
 }) {
-	const [selectedPlayer, setSelectedPlayer] = useState(0);
+	const [selectedPlayer, setSelectedPlayer] = useState(() => {
+		const saved = Number(localStorage.getItem("myteams:selectedPlayer"));
+		return Number.isInteger(saved) && saved >= 0 && saved < PLAYERS.length
+			? saved
+			: 0;
+	});
+	const selectPlayer = (i: number) => {
+		setSelectedPlayer(i);
+		localStorage.setItem("myteams:selectedPlayer", String(i));
+	};
 	const player = PLAYERS[selectedPlayer];
 	const alive = useMemo(
 		() => getAliveTeams(gMatches, kMatches),
@@ -82,7 +91,7 @@ export function MyTeams({
 						<button
 							key={p.name}
 							className={`player-pill${i === selectedPlayer ? " active" : ""}`}
-							onClick={() => setSelectedPlayer(i)}
+							onClick={() => selectPlayer(i)}
 						>
 							{p.name}
 							<span className="pill-alive">{pAlive}/6</span>

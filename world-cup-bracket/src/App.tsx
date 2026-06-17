@@ -109,8 +109,7 @@ export default function App() {
 	const liveCount = gMatches.filter((m) => m.status === "live").length;
 
 	// Group stage is over once every group match has been played
-	const groupStageDone =
-		gMatches.length > 0 && gMatches.every((m) => m.played);
+	const groupStageDone = gMatches.length > 0 && gMatches.every((m) => m.played);
 
 	// If user lands on (or navigates to) the bracket tab before the group
 	// stage is finished, treat them as on standings.
