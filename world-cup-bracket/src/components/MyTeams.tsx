@@ -6,8 +6,6 @@ import {
 	calcGroupStandings,
 	getAliveTeams,
 	getTeamStage,
-	getGroupAdvancementStatus,
-	type AdvancementStatus,
 } from "../utils/standings";
 
 /** Always returns all teams per group with zeroes, filling in played stats */
@@ -138,9 +136,6 @@ export function MyTeams({
 
 					// Group advancement status (only meaningful during group stage)
 					const inGroupStage = stage === "group";
-					const advStatus: AdvancementStatus | null = inGroupStage
-						? getGroupAdvancementStatus(tIdx, gMatches)
-						: null;
 					const isAdvancing = inGroupStage && advancing.has(tIdx);
 
 					return (
@@ -195,12 +190,6 @@ export function MyTeams({
 									<span className="mtc-stat-lbl">Pts</span>
 								</div>
 							</div>
-
-							<span
-								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage)}`}
-							>
-								{statusTextFor(advStatus, isAlive, stage)}
-							</span>
 
 							<div className="mtc-matches">
 								{teamGroupMatches.map((m) => {
@@ -288,48 +277,9 @@ function resultClass(myScore: number | null, oppScore: number | null): string {
 	return "draw";
 }
 
-type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
-
-function statusClassFor(
-	advStatus: AdvancementStatus | null,
-	isAlive: boolean,
-	stage: Stage,
-): string {
-	if (advStatus === "bubble") return "atRisk";
-	if (advStatus) return advStatus;
-	if (!isAlive) return "eliminated";
-	if (stage !== "group") return "alive";
-	return "alive";
-}
-
-function posBadgeClass(
-	inGroupStage: boolean,
-	isAdvancing: boolean,
-): string {
+function posBadgeClass(inGroupStage: boolean, isAdvancing: boolean): string {
 	if (!inGroupStage) return "";
 	return isAdvancing ? " advancing" : " not-advancing";
-}
-
-function statusTextFor(
-	advStatus: AdvancementStatus | null,
-	isAlive: boolean,
-	stage: Stage,
-): string {
-	if (advStatus) {
-		switch (advStatus) {
-			case "clinched":
-				return "✓ Clinched Top 2";
-			case "bubble":
-				return "⚠ At Risk";
-			case "atRisk":
-				return "⚠ At Risk";
-			case "eliminated":
-				return "Eliminated";
-		}
-	}
-	if (!isAlive) return "Eliminated";
-	if (stage !== "group") return `Alive — ${stage.toUpperCase()} STAGE`;
-	return "Alive — GROUP STAGE";
 }
 
 function formatShort(iso: string): string {

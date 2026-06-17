@@ -683,45 +683,6 @@ img {
 	color: var(--gold-light);
 }
 
-.mtc-status {
-	display: inline-block;
-	padding: 3px 10px;
-	border-radius: 10px;
-	font-size: 0.65rem;
-	font-weight: 600;
-	text-transform: uppercase;
-	letter-spacing: 1px;
-	margin-bottom: 8px;
-}
-.mtc-status.alive {
-	background: rgba(26, 138, 58, 0.15);
-	color: var(--green);
-}
-.mtc-status.clinched {
-	background: rgba(26, 138, 58, 0.15);
-	color: var(--green);
-}
-.mtc-status.bubble {
-	background: rgba(217, 119, 6, 0.15);
-	color: var(--amber);
-}
-.mtc-status.bubble-in {
-	background: rgba(26, 138, 58, 0.15);
-	color: var(--green);
-}
-.mtc-status.bubble-out {
-	background: rgba(196, 30, 58, 0.15);
-	color: var(--red);
-}
-.mtc-status.atRisk {
-	background: rgba(202, 138, 4, 0.15);
-	color: var(--yellow);
-}
-.mtc-status.eliminated {
-	background: rgba(196, 30, 58, 0.15);
-	color: var(--red);
-}
-
 .mtc-matches {
 	display: flex;
 	flex-direction: column;
