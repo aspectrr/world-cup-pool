@@ -199,9 +199,9 @@ export function MyTeams({
 							</div>
 
 							<span
-								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage, isAdvancing)}`}
+								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage)}`}
 							>
-								{statusTextFor(advStatus, isAlive, stage, isAdvancing)}
+								{statusTextFor(advStatus, isAlive, stage)}
 							</span>
 
 							<div className="mtc-matches">
@@ -296,9 +296,8 @@ function statusClassFor(
 	advStatus: AdvancementStatus | null,
 	isAlive: boolean,
 	stage: Stage,
-	isAdvancing: boolean,
 ): string {
-	if (advStatus === "bubble") return isAdvancing ? "bubble-in" : "bubble-out";
+	if (advStatus === "bubble") return "atRisk";
 	if (advStatus) return advStatus;
 	if (!isAlive) return "eliminated";
 	if (stage !== "group") return "alive";
@@ -318,14 +317,13 @@ function statusTextFor(
 	advStatus: AdvancementStatus | null,
 	isAlive: boolean,
 	stage: Stage,
-	isAdvancing: boolean,
 ): string {
 	if (advStatus) {
 		switch (advStatus) {
 			case "clinched":
 				return "✓ Clinched Top 2";
 			case "bubble":
-				return isAdvancing ? "✓ Advancing (Best 3rd)" : "✗ Outside Best 3rd";
+				return "⚠ At Risk (Best 3rd)";
 			case "atRisk":
 				return "⚠ At Risk";
 			case "eliminated":

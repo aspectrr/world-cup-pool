@@ -125,10 +125,7 @@ export function GroupsView({
 												? "advancing-third"
 												: "";
 										return (
-											<tr
-												key={s.teamIdx}
-												className={rowClass}
-											>
+											<tr key={s.teamIdx} className={rowClass}>
 												<td>
 													<div className="team-cell">
 														<img src={flagUrl(team.code)} alt={team.code} />
