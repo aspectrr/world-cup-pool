@@ -623,6 +623,9 @@ img {
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+.mtc-name.advancing {
+	color: var(--green);
+}
 .mtc-meta {
 	font-size: 0.68rem;
 	color: var(--text-dim);
@@ -712,6 +715,14 @@ img {
 .mtc-status.bubble {
 	background: rgba(217, 119, 6, 0.15);
 	color: var(--amber);
+}
+.mtc-status.bubble-in {
+	background: rgba(26, 138, 58, 0.15);
+	color: var(--green);
+}
+.mtc-status.bubble-out {
+	background: rgba(196, 30, 58, 0.15);
+	color: var(--red);
 }
 .mtc-status.atRisk {
 	background: rgba(202, 138, 4, 0.15);
@@ -978,6 +989,9 @@ img {
 .game-team-name {
 	font-size: 0.82rem;
 	font-weight: 600;
+}
+.game-team-name.advancing {
+	color: var(--green);
 }
 .game-owner {
 	font-size: 0.6rem;

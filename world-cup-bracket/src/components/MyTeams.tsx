@@ -57,9 +57,11 @@ function alwaysStandings(gMatches: GroupMatch[]): Map<string, GroupStanding[]> {
 export function MyTeams({
 	gMatches,
 	kMatches,
+	advancing,
 }: {
 	gMatches: GroupMatch[];
 	kMatches: KnockoutMatch[];
+	advancing: Set<number>;
 }) {
 	const [selectedPlayer, setSelectedPlayer] = useState(() => {
 		const saved = Number(localStorage.getItem("myteams:selectedPlayer"));
@@ -139,6 +141,7 @@ export function MyTeams({
 					const advStatus: AdvancementStatus | null = inGroupStage
 						? getGroupAdvancementStatus(tIdx, gMatches)
 						: null;
+					const isAdvancing = inGroupStage && advancing.has(tIdx);
 
 					return (
 						<div
@@ -150,13 +153,17 @@ export function MyTeams({
 									<img src={flagUrl(team.code)} alt={team.code} />
 								</div>
 								<div className="mtc-info">
-									<div className="mtc-name">{shortName(team.name)}</div>
+									<div
+										className={`mtc-name${isAdvancing ? " advancing" : ""}`}
+									>
+										{shortName(team.name)}
+									</div>
 									<div className="mtc-meta">
 										Group {team.group} • FIFA #{team.fifaRank}
 									</div>
 								</div>
 								<div
-									className={`mtc-pos-badge${advStatus ? ` ${advStatus}` : ""}`}
+									className={`mtc-pos-badge${posBadgeClass(advStatus, isAdvancing)}`}
 								>
 									{pos ? `#${pos}` : "–"}
 								</div>
@@ -194,9 +201,9 @@ export function MyTeams({
 							</div>
 
 							<span
-								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage)}`}
+								className={`mtc-status ${statusClassFor(advStatus, isAlive, stage, isAdvancing)}`}
 							>
-								{statusTextFor(advStatus, isAlive, stage)}
+								{statusTextFor(advStatus, isAlive, stage, isAdvancing)}
 							</span>
 
 							<div className="mtc-matches">
@@ -291,24 +298,38 @@ function statusClassFor(
 	advStatus: AdvancementStatus | null,
 	isAlive: boolean,
 	stage: Stage,
+	isAdvancing: boolean,
 ): string {
+	if (advStatus === "bubble") return isAdvancing ? "bubble-in" : "bubble-out";
 	if (advStatus) return advStatus;
 	if (!isAlive) return "eliminated";
 	if (stage !== "group") return "alive";
 	return "alive";
 }
 
+function posBadgeClass(
+	advStatus: AdvancementStatus | null,
+	isAdvancing: boolean,
+): string {
+	if (advStatus === "bubble") return isAdvancing ? " clinched" : " eliminated";
+	if (advStatus) return ` ${advStatus}`;
+	return "";
+}
+
 function statusTextFor(
 	advStatus: AdvancementStatus | null,
 	isAlive: boolean,
 	stage: Stage,
+	isAdvancing: boolean,
 ): string {
 	if (advStatus) {
 		switch (advStatus) {
 			case "clinched":
 				return "✓ Clinched Top 2";
 			case "bubble":
-				return "Bubble — Best 3rd Race";
+				return isAdvancing
+					? "✓ Advancing (Best 3rd)"
+					: "✗ Outside Best 3rd";
 			case "atRisk":
 				return "⚠ At Risk";
 			case "eliminated":

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Tab, GroupMatch, KnockoutMatch } from "./types";
 import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
 import { GROUP_SCHEDULE } from "./data/schedule";
@@ -9,6 +9,7 @@ import { GroupsView } from "./components/GroupsView";
 import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
+import { getAdvancingTeams } from "./utils/standings";
 
 const HASH_MAP: Record<string, Tab> = {
 	"": "standings",
@@ -111,6 +112,13 @@ export default function App() {
 	// Group stage is over once every group match has been played
 	const groupStageDone = gMatches.length > 0 && gMatches.every((m) => m.played);
 
+	// Snapshot of teams currently advancing to R32 (top-2 + best 8 thirds).
+	// Only meaningful while the group stage is still in progress.
+	const advancing = useMemo(
+		() => (groupStageDone ? new Set<number>() : getAdvancingTeams(gMatches)),
+		[gMatches, groupStageDone],
+	);
+
 	// If user lands on (or navigates to) the bracket tab before the group
 	// stage is finished, treat them as on standings.
 	const effectiveTab: Tab =
@@ -178,7 +186,11 @@ export default function App() {
 			)}
 			{effectiveTab === "groups" && <GroupsView matches={gMatches} />}
 			{effectiveTab === "games" && (
-				<GamesView gMatches={gMatches} kMatches={kMatches} />
+				<GamesView
+					gMatches={gMatches}
+					kMatches={kMatches}
+					advancing={advancing}
+				/>
 			)}
 			{effectiveTab === "bracket" && (
 				<BracketView
@@ -188,7 +200,11 @@ export default function App() {
 				/>
 			)}
 			{effectiveTab === "my-teams" && (
-				<MyTeams gMatches={gMatches} kMatches={kMatches} />
+				<MyTeams
+					gMatches={gMatches}
+					kMatches={kMatches}
+					advancing={advancing}
+				/>
 			)}
 		</div>
 	);

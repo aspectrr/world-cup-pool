@@ -1,5 +1,5 @@
 import type { GroupMatch, GroupStanding } from "../types";
-import { TEAMS } from "../data/teams";
+import { TEAMS, GROUPS } from "../data/teams";
 
 /** Compare two standings rows: points, GD, GF, then preset groupPos */
 function compareStandings(a: GroupStanding, b: GroupStanding): number {
@@ -268,4 +268,62 @@ export function getGroupAdvancementStatus(
 	if (bestPos === 4) return "eliminated";
 	if (currentPos === 3) return "bubble";
 	return "atRisk";
+}
+
+/**
+ * Snapshot of teams currently advancing to R32 based on live group standings.
+ *
+ * - Top 2 of each group (24 teams)
+ * - Best 8 of the 12 third-place teams (ranked: points, GD, GF, groupPos)
+ *
+ * Returns the 32 team indices that would advance if the tournament
+ * ended right now. Strict snapshot — does not project remaining matches.
+ */
+export function getAdvancingTeams(gMatches: GroupMatch[]): Set<number> {
+	const computed = calcGroupStandings(gMatches);
+	const advancing = new Set<number>();
+	const thirds: GroupStanding[] = [];
+
+	for (const group of GROUPS) {
+		const idxs = TEAMS.map((t, i) => ({ ...t, idx: i }))
+			.filter((t) => t.group === group)
+			.map((t) => t.idx);
+
+		const rows = idxs.map((idx) => {
+			const found = computed.get(group)?.find((s) => s.teamIdx === idx);
+			return (
+				found ?? {
+					teamIdx: idx,
+					played: 0,
+					won: 0,
+					drawn: 0,
+					lost: 0,
+					gf: 0,
+					ga: 0,
+					points: 0,
+				}
+			);
+		});
+		rows.sort(compareStandings);
+
+		if (rows[0]) advancing.add(rows[0].teamIdx);
+		if (rows[1]) advancing.add(rows[1].teamIdx);
+		if (rows[2]) thirds.push(rows[2]);
+	}
+
+	// Rank third-place teams: points, GD, GF, then groupPos
+	thirds.sort((a, b) => {
+		if (b.points !== a.points) return b.points - a.points;
+		const gdA = a.gf - a.ga;
+		const gdB = b.gf - b.ga;
+		if (gdB !== gdA) return gdB - gdA;
+		if (b.gf !== a.gf) return b.gf - a.gf;
+		return TEAMS[a.teamIdx].groupPos - TEAMS[b.teamIdx].groupPos;
+	});
+
+	for (let i = 0; i < Math.min(8, thirds.length); i++) {
+		advancing.add(thirds[i].teamIdx);
+	}
+
+	return advancing;
 }

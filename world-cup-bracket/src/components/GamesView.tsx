@@ -58,34 +58,50 @@ function formatTime(iso: string): string {
 	});
 }
 
-function GameRow({ m }: { m: GameMatch }) {
+function GameRow({
+	m,
+	advancing,
+}: {
+	m: GameMatch;
+	advancing: Set<number>;
+}) {
 	const home = TEAMS[m.homeIdx];
 	const away = TEAMS[m.awayIdx];
 	const homeOwner = teamOwner(m.homeIdx);
 	const awayOwner = teamOwner(m.awayIdx);
 	const isLive = m.status === "live";
 	const isFinished = m.status === "finished";
+	const homeAdv = advancing.has(m.homeIdx);
+	const awayAdv = advancing.has(m.awayIdx);
 
 	return (
 		<div
 			className={`game-row${isLive ? " live" : ""}${isFinished ? " finished" : ""}`}
 		>
-			<div className="game-teams">
-				<div className="game-team">
-					<div className="game-team-main">
-						<img src={flagUrl(home.code)} alt={home.code} />
-						<span className="game-team-name">{shortName(home.name)}</span>
+				<div className="game-teams">
+					<div className="game-team">
+						<div className="game-team-main">
+							<img src={flagUrl(home.code)} alt={home.code} />
+							<span
+								className={`game-team-name${homeAdv ? " advancing" : ""}`}
+							>
+								{shortName(home.name)}
+							</span>
+						</div>
+						{homeOwner && <span className="game-owner">{homeOwner}</span>}
 					</div>
-					{homeOwner && <span className="game-owner">{homeOwner}</span>}
-				</div>
-				<div className="game-team">
-					<div className="game-team-main">
-						<img src={flagUrl(away.code)} alt={away.code} />
-						<span className="game-team-name">{shortName(away.name)}</span>
+					<div className="game-team">
+						<div className="game-team-main">
+							<img src={flagUrl(away.code)} alt={away.code} />
+							<span
+								className={`game-team-name${awayAdv ? " advancing" : ""}`}
+							>
+								{shortName(away.name)}
+							</span>
+						</div>
+						{awayOwner && <span className="game-owner">{awayOwner}</span>}
 					</div>
-					{awayOwner && <span className="game-owner">{awayOwner}</span>}
 				</div>
-			</div>
 			<div className="game-score-col">
 				{isLive ? (
 					<>
@@ -123,9 +139,11 @@ function GameRow({ m }: { m: GameMatch }) {
 export function GamesView({
 	gMatches,
 	kMatches,
+	advancing,
 }: {
 	gMatches: GroupMatch[];
 	kMatches: KnockoutMatch[];
+	advancing: Set<number>;
 }) {
 	// Build sorted list of match days with their games.
 	const days = useMemo<DayGroup[]>(() => {
@@ -297,7 +315,7 @@ export function GamesView({
 							: current.label}
 					</div>
 					{current.games.map((g) => (
-						<GameRow key={g.id} m={g} />
+						<GameRow key={g.id} m={g} advancing={advancing} />
 					))}
 				</div>
 			) : (
