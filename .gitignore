@@ -1,2 +1,6 @@
 .vite
 .pi
+
+# Pix Agent
+.pi/
+.pi-lens/
