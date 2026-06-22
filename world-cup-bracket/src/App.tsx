@@ -9,7 +9,7 @@ import { GroupsView } from "./components/GroupsView";
 import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
-import { getAdvancingTeams } from "./utils/standings";
+import { getAdvancingTeams, getClinchedGroupWinners } from "./utils/standings";
 
 const HASH_MAP: Record<string, Tab> = {
 	"": "standings",
@@ -119,10 +119,18 @@ export default function App() {
 		[gMatches, groupStageDone],
 	);
 
-	// If user lands on (or navigates to) the bracket tab before the group
-	// stage is finished, treat them as on standings.
+	// Teams that have mathematically clinched 1st in their group — lets us
+	// surface the Bracket tab and seed R32 winner slots before group stage ends.
+	const clinchedWinners = useMemo(
+		() => getClinchedGroupWinners(gMatches),
+		[gMatches],
+	);
+
+	// Bracket tab is visible once any group winner has clinched OR the group
+	// stage is complete. If user lands on bracket before either, fall back.
+	const showBracket = clinchedWinners.size > 0 || groupStageDone;
 	const effectiveTab: Tab =
-		!groupStageDone && tab === "bracket" ? "standings" : tab;
+		!showBracket && tab === "bracket" ? "standings" : tab;
 
 	return (
 		<div className="app">
@@ -158,7 +166,7 @@ export default function App() {
 				>
 					Games
 				</button>
-				{groupStageDone && (
+				{showBracket && (
 					<button
 						className={`tab-btn${effectiveTab === "bracket" ? " active" : ""}`}
 						onClick={() => navigate("bracket")}
@@ -195,6 +203,7 @@ export default function App() {
 					matches={kMatches}
 					setMatches={setKMatches}
 					gMatches={gMatches}
+					clinchedWinners={clinchedWinners}
 				/>
 			)}
 			{effectiveTab === "my-teams" && (

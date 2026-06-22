@@ -140,10 +140,13 @@ export function Standings({
   gMatches: GroupMatch[];
   kMatches: KnockoutMatch[];
 }) {
+  const alive = useMemo(
+    () => getAliveTeams(gMatches, kMatches),
+    [gMatches, kMatches],
+  );
+
   const { rankings, championPlayer, runnerUpPlayer, firstOutPlayer } =
     useMemo(() => {
-      const alive = getAliveTeams(gMatches, kMatches);
-
       const scores: PlayerScore[] = PLAYERS.map((p) => {
         let totalStagePts = 0;
         let bestStage: Stage = "group";
@@ -239,7 +242,7 @@ export function Standings({
         runnerUpPlayer,
         firstOutPlayer,
       };
-    }, [gMatches, kMatches]);
+    }, [gMatches, kMatches, alive]);
 
   return (
     <div>
@@ -286,9 +289,7 @@ export function Standings({
                 <div className="standing-teams">
                   {p.teamIndices.map((tIdx) => {
                     const team = TEAMS[tIdx];
-                    const isAlive =
-                      !p.eliminated ||
-                      getAliveTeams(gMatches, kMatches).has(tIdx);
+                    const isAlive = alive.has(tIdx);
                     return (
                       <span
                         key={tIdx}

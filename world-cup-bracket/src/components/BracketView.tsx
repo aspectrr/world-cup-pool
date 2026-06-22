@@ -77,22 +77,22 @@ export function BracketView({
 	matches,
 	setMatches,
 	gMatches,
+	clinchedWinners,
 }: {
 	matches: KnockoutMatch[];
 	setMatches: React.Dispatch<React.SetStateAction<KnockoutMatch[]>>;
 	gMatches: GroupMatch[];
+	clinchedWinners: Set<number>;
 }) {
 	const allGroupPlayed = gMatches.length > 0 && gMatches.every((m) => m.played);
 	const r32Populated = matches.some(
 		(m) => m.round === "R32" && m.homeIdx !== null,
 	);
 
-	// Auto-populate R32 from group standings when all group matches complete
+	// Auto-populate R32: fill winner slots as groups clinch, full bracket
+	// (runners + best thirds) once every group match is played.
 	useEffect(() => {
-		if (!allGroupPlayed || r32Populated) return;
-
 		setMatches((prev) => {
-			const updated = [...prev];
 			const standings = calcGroupStandings(gMatches);
 
 			const winners: Record<string, number | null> = {};
@@ -106,9 +106,15 @@ export function BracketView({
 
 			for (const g of GROUPS_LIST) {
 				const gs = standings.get(g) ?? [];
-				winners[g] = gs[0]?.teamIdx ?? null;
-				runners[g] = gs[1]?.teamIdx ?? null;
-				if (gs[2])
+				const w = gs[0]?.teamIdx ?? null;
+				// Winner slot: fill only once clinched OR group fully decided.
+				winners[g] =
+					w !== null && (clinchedWinners.has(w) || allGroupPlayed)
+						? w
+						: null;
+			// Runner / third slots: only once every group match is played.
+				runners[g] = allGroupPlayed ? (gs[1]?.teamIdx ?? null) : null;
+				if (allGroupPlayed && gs[2])
 					thirds.push({
 						group: g,
 						idx: gs[2].teamIdx,
@@ -140,16 +146,18 @@ export function BracketView({
 				["R32-16", runners["J"], runners["L"]],
 			];
 
-			for (const [matchId, home, away] of r32Slots) {
-				const idx = updated.findIndex((m) => m.id === matchId);
-				if (idx !== -1) {
-					updated[idx] = { ...updated[idx], homeIdx: home, awayIdx: away };
-				}
-			}
-
-			return updated;
+			let changed = false;
+			const updated = prev.map((m) => {
+				const slot = r32Slots.find(([id]) => id === m.id);
+				if (!slot) return m;
+				const [, home, away] = slot;
+				if (m.homeIdx === home && m.awayIdx === away) return m;
+				changed = true;
+				return { ...m, homeIdx: home, awayIdx: away };
+			});
+			return changed ? updated : prev;
 		});
-	}, [allGroupPlayed, r32Populated, gMatches, setMatches]);
+	}, [allGroupPlayed, gMatches, clinchedWinners, setMatches]);
 
 	const rounds = ROUND_ORDER.map((round) => ({
 		round,
@@ -168,7 +176,7 @@ export function BracketView({
 						marginBottom: 12,
 					}}
 				>
-					Bracket fills automatically once all group matches are complete
+					Clinched group winners shown; bracket fills fully once group stage ends
 				</div>
 			) : !r32Populated ? (
 				<div

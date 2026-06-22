@@ -80,9 +80,9 @@ export function calcGroupStandings(
 	return map;
 }
 
-/** Get team indices still alive (not eliminated in knockout) */
+/** Get team indices still alive — not eliminated in knockout AND not mathematically eliminated from their group */
 export function getAliveTeams(
-	_gMatches: GroupMatch[],
+	gMatches: GroupMatch[],
 	kMatches: {
 		played: boolean;
 		homeIdx: number | null;
@@ -91,23 +91,66 @@ export function getAliveTeams(
 		awayScore: number | null;
 	}[],
 ): Set<number> {
-	// If no knockout matches played, all teams are alive
-	const anyKnockoutPlayed = kMatches.some((m) => m.played);
-	if (!anyKnockoutPlayed) return new Set(TEAMS.map((_, i) => i));
-
-	// Start with all teams, remove losers of played knockout matches
 	const alive = new Set(TEAMS.map((_, i) => i));
+
+	// Drop teams mathematically eliminated from their group (can't finish top-2)
+	for (let i = 0; i < TEAMS.length; i++) {
+		if (getGroupAdvancementStatus(i, gMatches) === "eliminated") {
+			alive.delete(i);
+		}
+	}
+
+	// Drop losers of played knockout matches
 	for (const m of kMatches) {
 		if (!m.played || m.homeScore === null || m.awayScore === null) continue;
 		if (m.homeIdx === null || m.awayIdx === null) continue;
-
-		if (m.homeScore > m.awayScore) {
-			alive.delete(m.awayIdx);
-		} else if (m.awayScore > m.homeScore) {
-			alive.delete(m.homeIdx);
-		}
+		if (m.homeScore > m.awayScore) alive.delete(m.awayIdx);
+		else if (m.awayScore > m.homeScore) alive.delete(m.homeIdx);
 	}
 	return alive;
+}
+
+/**
+ * Teams that have mathematically clinched 1st in their group — finish #1
+ * in every remaining-match scenario. Used to seed R32 winner slots early.
+ *
+ * ponytail: same 3^N fixed-scoreline enumeration as getGroupAdvancementStatus;
+ * doesn't explore every possible scoreline, so tiebreaker edge cases (GD/GF
+ * swings from extreme results) can theoretically flip a result. Acceptable
+ * for a pool tracker; promote to full scoreline enumeration if it misfires.
+ */
+export function getClinchedGroupWinners(gMatches: GroupMatch[]): Set<number> {
+	const winners = new Set<number>();
+	for (let i = 0; i < TEAMS.length; i++) {
+		const team = TEAMS[i];
+		const groupMatches = gMatches.filter((m) => m.group === team.group);
+		const played = groupMatches.filter(
+			(m) => m.played && m.homeScore !== null && m.awayScore !== null,
+		);
+		const remaining = groupMatches.filter((m) => !m.played);
+		const n = remaining.length;
+		const totalPerms = Math.pow(3, n);
+
+		let clinched = true;
+		for (let p = 0; p < totalPerms; p++) {
+			const simMatches = [...played];
+			let tmp = p;
+			for (let j = 0; j < n; j++) {
+				const [hs, as] = SIM_OUTCOMES[tmp % 3];
+				tmp = Math.floor(tmp / 3);
+				const m = remaining[j];
+				simMatches.push({ ...m, played: true, homeScore: hs, awayScore: as });
+			}
+			const finalList = calcGroupStandings(simMatches).get(team.group) ?? [];
+			const pos = finalList.findIndex((s) => s.teamIdx === i) + 1;
+			if (pos !== 1) {
+				clinched = false;
+				break;
+			}
+		}
+		if (clinched) winners.add(i);
+	}
+	return winners;
 }
 
 /** How far a team has progressed: group, r32, r16, qf, sf, final, winner */
