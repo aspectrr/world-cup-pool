@@ -58,6 +58,21 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 const ROUND_ORDER = ["R32", "R16", "QF", "SF", "FINAL"];
+const ROUND_COL: Record<string, number> = {
+	R32: 1,
+	R16: 2,
+	QF: 3,
+	SF: 4,
+	FINAL: 5,
+};
+// Row span per round: R32 takes 1 of 16 rows, FINAL spans all 16.
+const ROUND_SPAN: Record<string, number> = {
+	R32: 1,
+	R16: 2,
+	QF: 4,
+	SF: 8,
+	FINAL: 16,
+};
 const GROUPS_LIST = [
 	"A",
 	"B",
@@ -191,15 +206,39 @@ export function BracketView({
 				</div>
 			) : null}
 			<div className="bracket-scroll">
-				<div className="bracket-container">
-					{rounds.map(({ round, matches: roundMatches }) => (
-						<div key={round} className="bracket-round">
-							<div className="bracket-round-title">{ROUND_LABELS[round]}</div>
-							{roundMatches.map((m) => (
-								<MatchCard key={m.id} m={m} />
-							))}
+				<div className="bracket-titles">
+					{rounds.map(({ round }) => (
+						<div key={round} className="bracket-round-title">
+							{ROUND_LABELS[round]}
 						</div>
 					))}
+				</div>
+				<div className="bracket-grid">
+					{rounds.map(({ round, matches: rms }) =>
+						rms.map((m, i) => {
+							const span = ROUND_SPAN[round]!;
+							const pos =
+								round === "FINAL"
+									? "single"
+									: i % 2 === 0
+										? "top"
+										: "bottom";
+							return (
+								<div
+									key={m.id}
+									className="bracket-cell"
+									data-round={round}
+									data-pos={pos}
+									style={{
+										gridColumn: ROUND_COL[round],
+										gridRow: `${i * span + 1} / span ${span}`,
+									}}
+								>
+									<MatchCard m={m} />
+								</div>
+							);
+						}),
+					)}
 				</div>
 			</div>
 		</div>
