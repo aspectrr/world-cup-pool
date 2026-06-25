@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS, PRIZES } from "../data/players";
-import { getAliveTeams } from "../utils/standings";
+import { calcGroupStandings, getAliveTeams } from "../utils/standings";
 
 type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
 
@@ -127,6 +127,8 @@ interface PlayerScore {
   teamIndices: number[];
   alive: number;
   totalStagePts: number;
+  groupPoints: number; // sum of group-stage points across owned teams
+  groupGD: number; // sum of goal differential across owned teams
   bestStage: Stage;
   eliminated: boolean;
   lastElimRound: number; // when last team was KO'd (-1 = still alive or no KO yet)
@@ -147,10 +149,17 @@ export function Standings({
 
   const { rankings, championPlayer, runnerUpPlayer, firstOutPlayer } =
     useMemo(() => {
+      // Pre-compute group standings once to derive per-player point/GD totals
+      const groupMap = calcGroupStandings(gMatches);
+      const rowFor = (tIdx: number) =>
+        groupMap.get(TEAMS[tIdx].group)?.find((s) => s.teamIdx === tIdx);
+
       const scores: PlayerScore[] = PLAYERS.map((p) => {
         let totalStagePts = 0;
         let bestStage: Stage = "group";
         let aliveCount = 0;
+        let groupPoints = 0;
+        let groupGD = 0;
 
         for (const tIdx of p.teamIndices) {
           const stage = getTeamStage(tIdx, kMatches);
@@ -159,6 +168,12 @@ export function Standings({
             bestStage = stage;
           }
           if (alive.has(tIdx)) aliveCount++;
+
+          const row = rowFor(tIdx);
+          if (row) {
+            groupPoints += row.points;
+            groupGD += row.gf - row.ga;
+          }
         }
 
         const elim = getLastElimination(p.teamIndices, gMatches, kMatches);
@@ -168,6 +183,8 @@ export function Standings({
           teamIndices: p.teamIndices,
           alive: aliveCount,
           totalStagePts,
+          groupPoints,
+          groupGD,
           bestStage,
           eliminated: aliveCount === 0,
           lastElimRound: elim.round,
@@ -175,18 +192,22 @@ export function Standings({
         };
       });
 
-      // Sort: most alive → most stage points → best stage → last elim later
+      // Sort: alive → KO stage pts → group points → group GD → best stage → last elim later
+      // Group-stage phase: everyone has alive=6, stagePts=0, so groupPoints + groupGD
+      // become the effective ranking. Knockout phase: alive/stagePts take over.
       scores.sort((a, b) => {
         if (b.alive !== a.alive) return b.alive - a.alive;
         if (b.totalStagePts !== a.totalStagePts)
           return b.totalStagePts - a.totalStagePts;
+        if (b.groupPoints !== a.groupPoints)
+          return b.groupPoints - a.groupPoints;
+        if (b.groupGD !== a.groupGD) return b.groupGD - a.groupGD;
         if (
           STAGE_ORDER.indexOf(b.bestStage) !== STAGE_ORDER.indexOf(a.bestStage)
         )
           return (
             STAGE_ORDER.indexOf(b.bestStage) - STAGE_ORDER.indexOf(a.bestStage)
           );
-        // If both fully eliminated, who lasted longer?
         return b.lastElimRound - a.lastElimRound;
       });
 
