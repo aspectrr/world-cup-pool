@@ -563,6 +563,13 @@ img {
 	color: var(--text-dim);
 	font-style: italic;
 }
+.bracket-slot .owner {
+	margin-left: 4px;
+	font-size: 0.62rem;
+	color: var(--text-dim);
+	opacity: 0.75;
+	white-space: nowrap;
+}
 
 /* ─── MY TEAMS VIEW ─── */
 .player-selector {

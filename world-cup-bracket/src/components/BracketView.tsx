@@ -7,6 +7,13 @@ import {
 	populateR32,
 	type SeedSpec,
 } from "../data/bracket";
+import { PLAYERS } from "../data/players";
+
+// teamIdx -> owning player name
+const TEAM_OWNER = new Map<number, string>();
+for (const p of PLAYERS) {
+	for (const idx of p.teamIndices) TEAM_OWNER.set(idx, p.name);
+}
 
 function MatchCard({ m }: { m: KnockoutMatch }) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
@@ -29,6 +36,7 @@ function MatchCard({ m }: { m: KnockoutMatch }) {
 					<>
 						<img src={flagUrl(home.code)} alt={home.code} />
 						<span>{shortName(home.name)}</span>
+						<span className="owner">{TEAM_OWNER.get(m.homeIdx!)}</span>
 					</>
 				) : (
 					<span className="tbd">{m.homeSeed}</span>
@@ -42,6 +50,7 @@ function MatchCard({ m }: { m: KnockoutMatch }) {
 					<>
 						<img src={flagUrl(away.code)} alt={away.code} />
 						<span>{shortName(away.name)}</span>
+						<span className="owner">{TEAM_OWNER.get(m.awayIdx!)}</span>
 					</>
 				) : (
 					<span className="tbd">{m.awaySeed}</span>
@@ -152,18 +161,7 @@ export function BracketView({
 	return (
 		<div>
 			<div className="section-title">Knockout Stage</div>
-			{!allGroupPlayed ? (
-				<div
-					style={{
-						textAlign: "center",
-						color: "var(--text-dim)",
-						fontSize: "0.8rem",
-						marginBottom: 12,
-					}}
-				>
-					Clinched group winners shown; bracket fills fully once group stage ends
-				</div>
-			) : !r32Populated ? (
+			{allGroupPlayed && !r32Populated ? (
 				<div
 					style={{
 						textAlign: "center",
