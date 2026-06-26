@@ -15,9 +15,17 @@ for (const p of PLAYERS) {
 	for (const idx of p.teamIndices) TEAM_OWNER.set(idx, p.name);
 }
 
-function MatchCard({ m }: { m: KnockoutMatch }) {
+function MatchCard({
+	m,
+	liveTeamIdxs,
+}: {
+	m: KnockoutMatch;
+	liveTeamIdxs: Set<number>;
+}) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
 	const away = m.awayIdx !== null ? TEAMS[m.awayIdx] : null;
+	const homeLive = m.homeIdx !== null && liveTeamIdxs.has(m.homeIdx);
+	const awayLive = m.awayIdx !== null && liveTeamIdxs.has(m.awayIdx);
 	const homeWon =
 		m.played &&
 		m.homeScore !== null &&
@@ -31,11 +39,12 @@ function MatchCard({ m }: { m: KnockoutMatch }) {
 
 	return (
 		<div className="bracket-match">
-			<div className={`bracket-slot${homeWon ? " winner" : ""}`}>
+			<div className={`bracket-slot${homeWon ? " winner" : ""}${homeLive ? " live" : ""}`}>
 				{home ? (
 					<>
 						<img src={flagUrl(home.code)} alt={home.code} />
 						<span>{shortName(home.name)}</span>
+						{homeLive && <span className="slot-live-dot" />}
 						<span className="owner">{TEAM_OWNER.get(m.homeIdx!)}</span>
 					</>
 				) : (
@@ -45,11 +54,12 @@ function MatchCard({ m }: { m: KnockoutMatch }) {
 					<span className="score">{m.homeScore}</span>
 				)}
 			</div>
-			<div className={`bracket-slot${awayWon ? " winner" : ""}`}>
+			<div className={`bracket-slot${awayWon ? " winner" : ""}${awayLive ? " live" : ""}`}>
 				{away ? (
 					<>
 						<img src={flagUrl(away.code)} alt={away.code} />
 						<span>{shortName(away.name)}</span>
+						{awayLive && <span className="slot-live-dot" />}
 						<span className="owner">{TEAM_OWNER.get(m.awayIdx!)}</span>
 					</>
 				) : (
@@ -93,11 +103,13 @@ export function BracketView({
 	setMatches,
 	gMatches,
 	clinchedWinners,
+	liveTeamIdxs,
 }: {
 	matches: KnockoutMatch[];
 	setMatches: React.Dispatch<React.SetStateAction<KnockoutMatch[]>>;
 	gMatches: GroupMatch[];
 	clinchedWinners: Set<number>;
+	liveTeamIdxs: Set<number>;
 }) {
 	const allGroupPlayed = gMatches.length > 0 && gMatches.every((m) => m.played);
 	const r32Populated = matches.some(
@@ -198,7 +210,7 @@ export function BracketView({
 										gridRow: `${i * span + 1} / span ${span}`,
 									}}
 								>
-									<MatchCard m={m} />
+									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} />
 								</div>
 							);
 						}),

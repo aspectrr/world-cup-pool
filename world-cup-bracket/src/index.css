@@ -542,6 +542,18 @@ img {
 .bracket-slot.winner {
 	background: rgba(26, 138, 58, 0.12);
 }
+.bracket-slot.live {
+	background: rgba(196, 30, 58, 0.1);
+}
+.slot-live-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--red);
+	animation: livePulse 1.2s ease-in-out infinite;
+	display: inline-block;
+	flex-shrink: 0;
+}
 .bracket-slot img {
 	width: 20px;
 	height: 14px;
