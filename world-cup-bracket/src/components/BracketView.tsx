@@ -1,7 +1,12 @@
 import { useEffect } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
-import { calcGroupStandings } from "../utils/standings";
+import {
+	R32_SLOTS,
+	seedLabel,
+	populateR32,
+	type SeedSpec,
+} from "../data/bracket";
 
 function MatchCard({ m }: { m: KnockoutMatch }) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
@@ -73,20 +78,6 @@ const ROUND_SPAN: Record<string, number> = {
 	SF: 8,
 	FINAL: 16,
 };
-const GROUPS_LIST = [
-	"A",
-	"B",
-	"C",
-	"D",
-	"E",
-	"F",
-	"G",
-	"H",
-	"I",
-	"J",
-	"K",
-	"L",
-];
 
 export function BracketView({
 	matches,
@@ -104,71 +95,50 @@ export function BracketView({
 		(m) => m.round === "R32" && m.homeIdx !== null,
 	);
 
-	// Auto-populate R32: fill winner slots as groups clinch, full bracket
-	// (runners + best thirds) once every group match is played.
+	// Auto-populate R32 from group results. Pure derivation lives in
+	// populateR32 — this effect just merges the result into state.
 	useEffect(() => {
 		setMatches((prev) => {
-			const standings = calcGroupStandings(gMatches);
+			const r32 = populateR32(gMatches, clinchedWinners);
 
-			const winners: Record<string, number | null> = {};
-			const runners: Record<string, number | null> = {};
-			const thirds: {
-				group: string;
-				idx: number;
-				points: number;
-				gd: number;
-			}[] = [];
-
-			for (const g of GROUPS_LIST) {
-				const gs = standings.get(g) ?? [];
-				const w = gs[0]?.teamIdx ?? null;
-				// Winner slot: fill only once clinched OR group fully decided.
-				winners[g] =
-					w !== null && (clinchedWinners.has(w) || allGroupPlayed)
-						? w
-						: null;
-			// Runner / third slots: only once every group match is played.
-				runners[g] = allGroupPlayed ? (gs[1]?.teamIdx ?? null) : null;
-				if (allGroupPlayed && gs[2])
-					thirds.push({
-						group: g,
-						idx: gs[2].teamIdx,
-						points: gs[2].points,
-						gd: gs[2].gf - gs[2].ga,
-					});
+			// Re-seed labels too (third-place slots resolve once groups end).
+			const thirdGroupFor = new Map<string, string | null>();
+			// Walk R32_SLOTS in parallel with prev's R32 entries; the third label
+			// needs the resolved group, which we get by re-reading the slot spec.
+			// ponytail: assumes R32_SLOTS ordering matches generateKnockoutMatches.
+			for (const slot of R32_SLOTS) {
+				const filled = r32.get(slot.id);
+				thirdGroupFor.set(
+					slot.id,
+					filled && slot.home.kind === "3"
+						? groupLetterOf(filled[0])
+						: filled && slot.away.kind === "3"
+							? groupLetterOf(filled[1])
+							: null,
+				);
 			}
-
-			thirds.sort((a, b) => b.points - a.points || b.gd - a.gd);
-			const bestThirds = thirds.slice(0, 8);
-			const getThird = (i: number) => bestThirds[i]?.idx ?? null;
-
-			const r32Slots: [string, number | null, number | null][] = [
-				["R32-1", winners["A"], runners["B"]],
-				["R32-2", winners["C"], runners["D"]],
-				["R32-3", winners["E"], runners["F"]],
-				["R32-4", winners["G"], runners["H"]],
-				["R32-5", winners["B"], getThird(0)],
-				["R32-6", winners["D"], getThird(1)],
-				["R32-7", winners["F"], getThird(2)],
-				["R32-8", winners["H"], getThird(3)],
-				["R32-9", winners["I"], runners["J"]],
-				["R32-10", winners["K"], runners["L"]],
-				["R32-11", runners["A"], getThird(4)],
-				["R32-12", runners["C"], getThird(5)],
-				["R32-13", runners["E"], getThird(6)],
-				["R32-14", runners["G"], getThird(7)],
-				["R32-15", runners["I"], runners["K"]],
-				["R32-16", runners["J"], runners["L"]],
-			];
 
 			let changed = false;
 			const updated = prev.map((m) => {
-				const slot = r32Slots.find(([id]) => id === m.id);
+				if (m.round !== "R32") return m;
+				const slot = R32_SLOTS.find((s) => s.id === m.id);
 				if (!slot) return m;
-				const [, home, away] = slot;
-				if (m.homeIdx === home && m.awayIdx === away) return m;
+				const filled = r32.get(m.id);
+				if (!filled) return m;
+				const [home, away] = filled;
+				const tg = thirdGroupFor.get(m.id) ?? null;
+				const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
+				const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
+				if (
+					m.homeIdx === home &&
+					m.awayIdx === away &&
+					m.homeSeed === homeSeed &&
+					m.awaySeed === awaySeed
+				) {
+					return m;
+				}
 				changed = true;
-				return { ...m, homeIdx: home, awayIdx: away };
+				return { ...m, homeIdx: home, awayIdx: away, homeSeed, awaySeed };
 			});
 			return changed ? updated : prev;
 		});
@@ -218,11 +188,7 @@ export function BracketView({
 						rms.map((m, i) => {
 							const span = ROUND_SPAN[round]!;
 							const pos =
-								round === "FINAL"
-									? "single"
-									: i % 2 === 0
-										? "top"
-										: "bottom";
+								round === "FINAL" ? "single" : i % 2 === 0 ? "top" : "bottom";
 							return (
 								<div
 									key={m.id}
@@ -243,4 +209,15 @@ export function BracketView({
 			</div>
 		</div>
 	);
+}
+
+function groupLetterOf(idx: number | null): string | null {
+	if (idx === null) return null;
+	return TEAMS[idx].group;
+}
+
+// When the seed is a third-place slot, return the resolved group letter;
+// otherwise return null (the label ignores it for winner/runner specs).
+function groupLetterOfIfThird(spec: SeedSpec, tg: string | null): string | null {
+	return spec.kind === "3" ? tg : null;
 }
