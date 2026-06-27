@@ -35,7 +35,9 @@ export interface KnockoutMatch {
 	homeScore: number | null;
 	awayScore: number | null;
 	played: boolean;
-	date?: string; // ISO datetime from ESPN
+	status?: MatchStatus;
+	clock?: string; // e.g. "45'+2'" or "FT" when finished
+	date?: string; // ISO datetime — static schedule or live ESPN
 	homeSeed: string; // e.g. "1A" = winner of group A, "2B" = runner-up, "3C" = 3rd place group C
 	awaySeed: string;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Tab, GroupMatch, KnockoutMatch } from "./types";
 import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
-import { GROUP_SCHEDULE } from "./data/schedule";
+import { GROUP_SCHEDULE, KNOCKOUT_SCHEDULE } from "./data/schedule";
 import { useESPNLive } from "./hooks/useESPNLive";
 import type { ServerMatch } from "./hooks/useESPNLive";
 import { Standings } from "./components/Standings";
@@ -37,7 +37,11 @@ const initGroupMatches = generateGroupMatches().map((m) => ({
 	...m,
 	date: GROUP_SCHEDULE[m.id],
 }));
-const initKnockoutMatches = generateKnockoutMatches();
+// Apply static schedule to knockout matches so dates show before ESPN lists them
+const initKnockoutMatches = generateKnockoutMatches().map((m) => ({
+	...m,
+	date: KNOCKOUT_SCHEDULE[m.id] ?? m.date,
+}));
 
 export default function App() {
 	const [tab, setTab] = useState<Tab>(tabFromHash);
@@ -87,6 +91,49 @@ export default function App() {
 					m.played === played &&
 					m.homeScore === homeScore &&
 					m.awayScore === awayScore
+				) {
+					return m;
+				}
+
+				changed = true;
+				return {
+					...m,
+					homeScore,
+					awayScore,
+					played,
+					status: sm.status,
+					clock: sm.clock,
+					date: sm.date,
+				};
+			});
+
+			return changed ? updated : prev;
+		});
+
+		// Merge live results into knockout matches. Server keys by team-idx pair
+		// with no round discriminator, so a group-stage result (pre-Jun-28) could
+		// collide with a later knockout matchup of the same teams. Filter server
+		// entries to the knockout window to avoid that.
+		const R32_START = "2026-06-28T00:00:00Z";
+		setKMatches((prev) => {
+			let changed = false;
+			const updated = prev.map((m) => {
+				if (m.homeIdx === null || m.awayIdx === null) return m;
+				const sm = byTeams.get(`${m.homeIdx}v${m.awayIdx}`);
+				if (!sm || sm.date < R32_START) return m;
+
+				const isReversed = sm.home_idx === m.awayIdx;
+				const homeScore = isReversed ? sm.away_score : sm.home_score;
+				const awayScore = isReversed ? sm.home_score : sm.away_score;
+				const played = sm.status === "finished" || sm.status === "live";
+
+				if (
+					m.status === sm.status &&
+					m.played === played &&
+					m.homeScore === homeScore &&
+					m.awayScore === awayScore &&
+					m.clock === sm.clock &&
+					m.date === sm.date
 				) {
 					return m;
 				}

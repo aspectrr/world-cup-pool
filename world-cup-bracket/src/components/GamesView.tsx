@@ -155,8 +155,8 @@ export function GamesView({
 				awayIdx: m.awayIdx,
 				homeScore: m.homeScore,
 				awayScore: m.awayScore,
-				status: m.played ? "finished" : "scheduled",
-				clock: "",
+				status: m.status ?? (m.played ? "finished" : "scheduled"),
+				clock: m.clock ?? "",
 				round: m.round,
 			});
 		}
