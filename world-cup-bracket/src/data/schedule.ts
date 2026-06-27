@@ -144,3 +144,54 @@ export const GROUP_SCHEDULE: Record<string, string> = {
 	G70: "2026-06-27T17:00:00-04:00", // England vs Panama
 	G71: "2026-06-27T17:00:00-04:00", // Croatia vs Ghana
 };
+
+/**
+ * Official WC2026 knockout stage schedule — all times ET (UTC-4).
+ *
+ * Keys are FIFA match IDs (M73..M104) matching `KnockoutMatch.id` generated
+ * by generateKnockoutMatches(). M103 (third-place play-off) is not tracked.
+ *
+ * Source: FIFA match schedule + worldcupwiki R32/R16/QF round pages.
+ */
+export const KNOCKOUT_SCHEDULE: Record<string, string> = {
+	// === Round of 32 (M73–M88) — Jun 28 to Jul 3 ===
+	M73: "2026-06-28T15:00:00-04:00", // 2A vs 2B
+	M74: "2026-06-29T16:30:00-04:00", // 1E vs 3rd
+	M75: "2026-06-29T21:00:00-04:00", // 1F vs 2C
+	M76: "2026-06-29T13:00:00-04:00", // 1C vs 2F
+	M77: "2026-06-30T17:00:00-04:00", // 1I vs 3rd
+	M78: "2026-06-30T13:00:00-04:00", // 2E vs 2I
+	M79: "2026-06-30T21:00:00-04:00", // 1A vs 3rd
+	M80: "2026-07-01T12:00:00-04:00", // 1L vs 3rd
+	M81: "2026-07-01T20:00:00-04:00", // 1D vs 3rd
+	M82: "2026-07-01T16:00:00-04:00", // 1G vs 3rd
+	M83: "2026-07-02T19:00:00-04:00", // 2K vs 2L
+	M84: "2026-07-02T15:00:00-04:00", // 1H vs 2J
+	M85: "2026-07-02T23:00:00-04:00", // 1B vs 3rd
+	M86: "2026-07-03T18:00:00-04:00", // 1J vs 2H
+	M87: "2026-07-03T21:30:00-04:00", // 1K vs 3rd
+	M88: "2026-07-03T14:00:00-04:00", // 2D vs 2G
+
+	// === Round of 16 (M89–M96) — Jul 4 to Jul 7 ===
+	M89: "2026-07-04T17:00:00-04:00", // W M74 vs W M77
+	M90: "2026-07-04T13:00:00-04:00", // W M73 vs W M75
+	M91: "2026-07-05T16:00:00-04:00", // W M76 vs W M78
+	M92: "2026-07-05T20:00:00-04:00", // W M79 vs W M80
+	M93: "2026-07-06T15:00:00-04:00", // W M83 vs W M84
+	M94: "2026-07-06T20:00:00-04:00", // W M81 vs W M82
+	M95: "2026-07-07T12:00:00-04:00", // W M86 vs W M88
+	M96: "2026-07-07T16:00:00-04:00", // W M85 vs W M87
+
+	// === Quarter-finals (M97–M100) — Jul 9 to Jul 11 ===
+	M97: "2026-07-09T16:00:00-04:00", // W M89 vs W M90
+	M98: "2026-07-10T15:00:00-04:00", // W M93 vs W M94
+	M99: "2026-07-11T17:00:00-04:00", // W M91 vs W M92
+	M100: "2026-07-11T21:00:00-04:00", // W M95 vs W M96
+
+	// === Semi-finals (M101–M102) — Jul 14 to Jul 15 ===
+	M101: "2026-07-14T15:00:00-04:00", // W M97 vs W M98 (Dallas)
+	M102: "2026-07-15T15:00:00-04:00", // W M99 vs W M100 (Atlanta)
+
+	// === Final (M104) — Jul 19 ===
+	M104: "2026-07-19T15:00:00-04:00", // W M101 vs W M102 (MetLife)
+};
