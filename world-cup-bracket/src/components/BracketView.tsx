@@ -9,6 +9,17 @@ for (const p of PLAYERS) {
 	for (const idx of p.teamIndices) TEAM_OWNER.set(idx, p.name);
 }
 
+function formatKickoff(iso?: string): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	return d.toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		hour: "numeric",
+		minute: "2-digit",
+	});
+}
+
 function MatchCard({
 	m,
 	liveTeamIdxs,
@@ -30,12 +41,16 @@ function MatchCard({
 		m.homeScore !== null &&
 		m.awayScore !== null &&
 		m.awayScore > m.homeScore;
+	const showKickoff = !m.played && (home || away) && !!m.date;
 
 	return (
 		<div className="bracket-match">
 			<div className={`bracket-slot${homeWon ? " winner" : ""}${homeLive ? " live" : ""}`}>
 				{m.status === "live" && m.clock && (
-					<span className="bracket-live-clock">{m.clock}</span>
+					<span className="bracket-live-clock">
+						<span className="live-pip" />
+						{m.clock}
+					</span>
 				)}
 				{home ? (
 					<>
@@ -64,6 +79,7 @@ function MatchCard({
 					<span className="score">{m.awayScore}</span>
 				)}
 			</div>
+			{showKickoff && <div className="bracket-kickoff">{formatKickoff(m.date)}</div>}
 		</div>
 	);
 }

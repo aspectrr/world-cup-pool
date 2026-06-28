@@ -545,11 +545,15 @@ img {
 .bracket-slot.live {
 	background: rgba(196, 30, 58, 0.1);
 }
-/* single per-match live clock — faded red bg matching the slot tint */
+/* single per-match live clock — transparent bg so the blinking dot
+ * stands out against the faded-red live slot tint */
 .bracket-live-clock {
 	position: absolute;
 	top: 1px;
 	right: 4px;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
 	color: var(--red);
 	font-size: 0.55rem;
 	font-weight: 700;
@@ -560,6 +564,24 @@ img {
 	line-height: 1.2;
 	pointer-events: none;
 	background: transparent;
+}
+.bracket-live-clock .live-pip {
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: var(--red);
+	animation: livePulse 1.2s ease-in-out infinite;
+	display: inline-block;
+}
+/* kickoff time shown under an unplayed match once at least one team resolved */
+.bracket-kickoff {
+	font-size: 0.58rem;
+	color: var(--text-dim);
+	text-align: center;
+	padding: 3px 0 1px;
+	font-variant-numeric: tabular-nums;
+	border-top: 1px solid rgba(255, 255, 255, 0.06);
+	margin-top: 2px;
 }
 .bracket-slot img {
 	width: 20px;

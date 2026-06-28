@@ -248,15 +248,20 @@ export default function App() {
 				return base;
 			}
 
-			// R16/QF/SF/FINAL: feeders referenced via "Winner MXX" seeds.
+			// R16/QF/SF/FINAL: feeders referenced via "Winner MXX" seeds. Fill
+			// each slot independently so a resolved winner shows immediately
+			// even before its opponent is known.
 			const homeFeeder = m.homeSeed.match(/Winner (\w+)/)?.[1] ?? null;
 			const awayFeeder = m.awaySeed.match(/Winner (\w+)/)?.[1] ?? null;
 			const homeIdx = homeFeeder ? (winnerOf.get(homeFeeder) ?? null) : null;
 			const awayIdx = awayFeeder ? (winnerOf.get(awayFeeder) ?? null) : null;
-			if (homeIdx === null || awayIdx === null) return m;
-			const base: KnockoutMatch = { ...m, homeIdx, awayIdx };
-			const live = mergeLive(homeIdx, awayIdx);
-			if (live) Object.assign(base, live);
+			const base: KnockoutMatch = { ...m };
+			if (homeIdx !== null) base.homeIdx = homeIdx;
+			if (awayIdx !== null) base.awayIdx = awayIdx;
+			if (base.homeIdx !== null && base.awayIdx !== null) {
+				const live = mergeLive(base.homeIdx, base.awayIdx);
+				if (live) Object.assign(base, live);
+			}
 			winnerOf.set(
 				m.id,
 				base.played &&
@@ -264,9 +269,9 @@ export default function App() {
 					base.awayScore !== null &&
 					base.status !== "live"
 					? base.homeScore > base.awayScore
-						? homeIdx
+						? base.homeIdx!
 						: base.awayScore > base.homeScore
-							? awayIdx
+							? base.awayIdx!
 							: null
 					: null,
 			);
