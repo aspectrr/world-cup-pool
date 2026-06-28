@@ -170,11 +170,12 @@ export default function App() {
 	// Group stage is over once every group match has been played
 	const groupStageDone = gMatches.length > 0 && gMatches.every((m) => m.played);
 
-	// Snapshot of teams currently advancing to R32 (top-2 + best 8 thirds).
-	// Only meaningful while the group stage is still in progress.
+	// Teams advancing to R32: live snapshot during group stage (top-2 + best
+	// 8 thirds on current form), final answer once groups are done. Used to
+	// highlight advancing rows in GroupsView and MyTeams position badges.
 	const advancing = useMemo(
-		() => (groupStageDone ? new Set<number>() : getAdvancingTeams(gMatches)),
-		[gMatches, groupStageDone],
+		() => getAdvancingTeams(gMatches),
+		[gMatches],
 	);
 
 	// Teams that have mathematically clinched 1st in their group — lets us
