@@ -80,7 +80,19 @@ export function calcGroupStandings(
 	return map;
 }
 
-/** Get team indices still alive — not eliminated in knockout AND not mathematically eliminated from their group */
+/**
+ * Get team indices still alive — not eliminated in knockout AND not
+ * eliminated from their group.
+ *
+ * - While group stage is in progress: drop only teams mathematically
+ *   eliminated (can't finish top-2). Third-place bubble teams stay alive
+ *   since the best-8-thirds race isn't decided yet.
+ * - Once group stage is done: the 32 advancing teams (top-2 of each group
+ *   + best 8 thirds) are the only alive teams. Third-place teams that
+ *   missed the best-8 cutoff are out.
+ *
+ * Then drop losers of played knockout matches in either phase.
+ */
 export function getAliveTeams(
 	gMatches: GroupMatch[],
 	kMatches: {
@@ -91,12 +103,19 @@ export function getAliveTeams(
 		awayScore: number | null;
 	}[],
 ): Set<number> {
-	const alive = new Set(TEAMS.map((_, i) => i));
+	const groupStageDone =
+		gMatches.length > 0 && gMatches.every((m) => m.played);
 
-	// Drop teams mathematically eliminated from their group (can't finish top-2)
-	for (let i = 0; i < TEAMS.length; i++) {
-		if (getGroupAdvancementStatus(i, gMatches) === "eliminated") {
-			alive.delete(i);
+	const alive = groupStageDone
+		? getAdvancingTeams(gMatches)
+		: new Set(TEAMS.map((_, i) => i));
+
+	// During group stage: drop teams mathematically eliminated (can't finish top-2)
+	if (!groupStageDone) {
+		for (let i = 0; i < TEAMS.length; i++) {
+			if (getGroupAdvancementStatus(i, gMatches) === "eliminated") {
+				alive.delete(i);
+			}
 		}
 	}
 
