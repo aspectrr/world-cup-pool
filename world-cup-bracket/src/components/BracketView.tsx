@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
+import { knockoutWinner } from "../utils/standings";
 
 // teamIdx -> owning player name
 const TEAM_OWNER = new Map<number, string>();
@@ -20,16 +21,14 @@ function MatchCard({
 	const away = m.awayIdx !== null ? TEAMS[m.awayIdx] : null;
 	const homeLive = m.homeIdx !== null && liveTeamIdxs.has(m.homeIdx);
 	const awayLive = m.awayIdx !== null && liveTeamIdxs.has(m.awayIdx);
-	const homeWon =
+	const winnerIdx = knockoutWinner(m);
+	const homeWon = winnerIdx !== null && winnerIdx === m.homeIdx;
+	const awayWon = winnerIdx !== null && winnerIdx === m.awayIdx;
+	const isETorPens =
 		m.played &&
 		m.homeScore !== null &&
 		m.awayScore !== null &&
-		m.homeScore > m.awayScore;
-	const awayWon =
-		m.played &&
-		m.homeScore !== null &&
-		m.awayScore !== null &&
-		m.awayScore > m.homeScore;
+		m.homeScore === m.awayScore;
 
 	return (
 		<div className="bracket-match">
@@ -67,6 +66,9 @@ function MatchCard({
 					<span className="score">{m.awayScore}</span>
 				)}
 			</div>
+			{m.played && m.detail && isETorPens && (
+				<div className="bracket-match-detail">{m.detail}</div>
+			)}
 		</div>
 	);
 }

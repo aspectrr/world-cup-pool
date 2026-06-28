@@ -120,6 +120,7 @@ export default function App() {
 					status: sm.status,
 					clock: sm.clock,
 					date: sm.date,
+					detail: sm.detail,
 				};
 			});
 
@@ -159,11 +160,9 @@ export default function App() {
 	);
 
 	// Knockout matches derived in a single pass: R32 seeded from group results
-	// via populateR32, then live scores/status/clock merged from the server.
-	// Previously this was split across two setKMatches effects that cascaded —
-	// live merge ran before populateR32 filled homeIdx/awayIdx, so R32 scores
-	// only appeared on the next 30s poll. Deriving here resolves both in one
-	// render so the bracket is current as soon as data lands.
+	// via populateR32, then live scores/status/clock merged from the server,
+	// then winners propagated forward to fill R16→QF→SF→FINAL feeders so
+	// downstream rounds also merge live scores.
 	const kMatches = useMemo<KnockoutMatch[]>(() => {
 		const r32 = populateR32(gMatches, clinchedWinners);
 
@@ -190,15 +189,9 @@ export default function App() {
 		}
 		const R32_START = "2026-06-28T00:00:00Z";
 
-		return initKnockoutMatches.map((m) => {
-			if (m.round !== "R32") {
-				// R16/QF/SF/FINAL: merge live score if both feeders resolved and
-				// the server has a result for this team pairing in the knockout
-				// window. Indices come from prior R32 winners — but we don't yet
-				// propagate winners forward here, so non-R32 matches stay as the
-				// skeleton until ESPN lists them directly.
-				return m;
-			}
+		// Pass 1: fill R32 from group results + live server merge.
+		const out = initKnockoutMatches.map((m) => {
+			if (m.round !== "R32") return m;
 			const slot = R32_SLOTS.find((s) => s.id === m.id);
 			if (!slot) return m;
 			const filled = r32.get(m.id);
@@ -208,7 +201,6 @@ export default function App() {
 			const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
 			const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
 
-			// Merge live score for this R32 pairing.
 			const sm =
 				homeIdx !== null && awayIdx !== null
 					? byTeams.get(`${homeIdx}v${awayIdx}`)
@@ -232,8 +224,83 @@ export default function App() {
 				status: sm.status,
 				clock: sm.clock,
 				date: sm.date,
+				winnerIdx: sm.winner_idx,
+				detail: sm.detail,
 			};
 		});
+
+		// Pass 2: propagate winners forward to fill downstream feeders.
+		// R16[i] is fed by out[2i] + out[2i+1]; QF/SF/FINAL chain the same
+		// pattern (see generateKnockoutMatches for the offset math).
+		const winnerOf = (m: KnockoutMatch): number | null => {
+			if (!m.played || m.homeScore === null || m.awayScore === null) return null;
+			if (m.winnerIdx !== null && m.winnerIdx !== undefined) return m.winnerIdx;
+			if (m.homeScore > m.awayScore) return m.homeIdx;
+			if (m.awayScore > m.homeScore) return m.awayIdx;
+			return null;
+		};
+
+		// R16 feeders: out[0..15] (R32) → out[16..23]
+		for (let i = 0; i < 8; i++) {
+			const a = out[i * 2];
+			const b = out[i * 2 + 1];
+			const homeIdx = winnerOf(a);
+			const awayIdx = winnerOf(b);
+			if (homeIdx === null && awayIdx === null) continue;
+			out[16 + i] = { ...out[16 + i], homeIdx, awayIdx };
+		}
+		// QF feeders: out[16..23] (R16) → out[24..27]
+		for (let i = 0; i < 4; i++) {
+			const a = out[16 + i * 2];
+			const b = out[16 + i * 2 + 1];
+			const homeIdx = winnerOf(a);
+			const awayIdx = winnerOf(b);
+			if (homeIdx === null && awayIdx === null) continue;
+			out[24 + i] = { ...out[24 + i], homeIdx, awayIdx };
+		}
+		// SF feeders: out[24..27] (QF) → out[28..29]
+		for (let i = 0; i < 2; i++) {
+			const a = out[24 + i * 2];
+			const b = out[24 + i * 2 + 1];
+			const homeIdx = winnerOf(a);
+			const awayIdx = winnerOf(b);
+			if (homeIdx === null && awayIdx === null) continue;
+			out[28 + i] = { ...out[28 + i], homeIdx, awayIdx };
+		}
+		// FINAL feeders: out[28..29] (SF) → out[30]
+		{
+			const homeIdx = winnerOf(out[28]);
+			const awayIdx = winnerOf(out[29]);
+			if (homeIdx !== null || awayIdx !== null) {
+				out[30] = { ...out[30], homeIdx, awayIdx };
+			}
+		}
+
+		// Pass 3: merge live server data for any knockout match whose team
+		// pairing now resolves (R16+). Catches score/status/winnerIdx/detail.
+		for (let i = 16; i < out.length; i++) {
+			const m = out[i];
+			if (m.homeIdx === null || m.awayIdx === null) continue;
+			const sm = byTeams.get(`${m.homeIdx}v${m.awayIdx}`);
+			if (!sm || sm.date < R32_START) continue;
+			const isReversed = sm.home_idx === m.awayIdx;
+			const homeScore = isReversed ? sm.away_score : sm.home_score;
+			const awayScore = isReversed ? sm.home_score : sm.away_score;
+			const played = sm.status === "finished" || sm.status === "live";
+			out[i] = {
+				...m,
+				homeScore,
+				awayScore,
+				played,
+				status: sm.status,
+				clock: sm.clock,
+				date: sm.date,
+				winnerIdx: sm.winner_idx,
+				detail: sm.detail,
+			};
+		}
+
+		return out;
 	}, [gMatches, clinchedWinners, live.matches]);
 
 	// Bracket tab is visible once any group winner has clinched OR the group

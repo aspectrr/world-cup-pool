@@ -20,6 +20,7 @@ interface GameMatch {
 	status: "scheduled" | "live" | "finished";
 	clock: string;
 	round: string; // "Group A" or "R32" etc
+	detail?: string;
 }
 
 interface DayGroup {
@@ -113,6 +114,9 @@ function GameRow({ m }: { m: GameMatch }) {
 				)}
 				{!isLive && m.date && (
 					<span className="game-time">{formatTime(m.date)}</span>
+				)}
+				{isFinished && m.detail && (
+					<span className="game-detail">{m.detail}</span>
 				)}
 				<span className="game-round">{m.round}</span>
 			</div>

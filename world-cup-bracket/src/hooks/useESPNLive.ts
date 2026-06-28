@@ -10,6 +10,8 @@ export interface ServerMatch {
 	status: "scheduled" | "live" | "finished";
 	clock: string;
 	date: string;
+	winner_idx: number | null;
+	detail: string;
 }
 
 export interface ResultsResponse {
