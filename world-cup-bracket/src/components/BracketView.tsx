@@ -20,12 +20,58 @@ function formatKickoff(iso?: string): string {
 	});
 }
 
+// FIFA-style 3-letter abbreviations; default to first-3 of name with
+// overrides for multi-word / ambiguous codes.
+const ABBR_OVERRIDE: Record<string, string> = {
+	us: "USA",
+	ba: "BIH",
+	cd: "COD",
+	cv: "CPV",
+	ci: "CIV",
+	ch: "SUI",
+	at: "AUT",
+	gb: "ENG",
+};
+function abbr(name: string, code: string): string {
+	return ABBR_OVERRIDE[code] ?? name.slice(0, 3).toUpperCase();
+}
+
+/** Render a "Winner MXX" slot as a feeder matchup preview:
+ * [flag abbr v flag abbr datetime] when both feeder teams are known. */
+function SeedPreview({
+	seed,
+	matchById,
+}: {
+	seed: string;
+	matchById: Map<string, KnockoutMatch>;
+}) {
+	const feederId = seed.match(/Winner (\w+)/)?.[1] ?? null;
+	const feeder = feederId ? matchById.get(feederId) : undefined;
+	const h = feeder?.homeIdx !== null && feeder?.homeIdx !== undefined ? TEAMS[feeder.homeIdx] : null;
+	const a = feeder?.awayIdx !== null && feeder?.awayIdx !== undefined ? TEAMS[feeder.awayIdx] : null;
+	if (!h || !a) return <span className="tbd">{seed}</span>;
+	return (
+		<span className="seed-preview">
+			<img src={flagUrl(h.code)} alt={h.code} />
+			<span className="seed-abbr">{abbr(h.name, h.code)}</span>
+			<span className="seed-vs">v</span>
+			<img src={flagUrl(a.code)} alt={a.code} />
+			<span className="seed-abbr">{abbr(a.name, a.code)}</span>
+			{feeder?.date && (
+				<span className="seed-time">{formatKickoff(feeder.date)}</span>
+			)}
+		</span>
+	);
+}
+
 function MatchCard({
 	m,
 	liveTeamIdxs,
+	matchById,
 }: {
 	m: KnockoutMatch;
 	liveTeamIdxs: Set<number>;
+	matchById: Map<string, KnockoutMatch>;
 }) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
 	const away = m.awayIdx !== null ? TEAMS[m.awayIdx] : null;
@@ -41,7 +87,6 @@ function MatchCard({
 		m.homeScore !== null &&
 		m.awayScore !== null &&
 		m.awayScore > m.homeScore;
-	const showKickoff = !m.played && (home || away) && !!m.date;
 
 	return (
 		<div className="bracket-match">
@@ -59,7 +104,7 @@ function MatchCard({
 						<span className="owner">{TEAM_OWNER.get(m.homeIdx!)}</span>
 					</>
 				) : (
-					<span className="tbd">{m.homeSeed}</span>
+					<SeedPreview seed={m.homeSeed} matchById={matchById} />
 				)}
 				{m.played && m.homeScore !== null && (
 					<span className="score">{m.homeScore}</span>
@@ -73,13 +118,12 @@ function MatchCard({
 						<span className="owner">{TEAM_OWNER.get(m.awayIdx!)}</span>
 					</>
 				) : (
-					<span className="tbd">{m.awaySeed}</span>
+					<SeedPreview seed={m.awaySeed} matchById={matchById} />
 				)}
 				{m.played && m.awayScore !== null && (
 					<span className="score">{m.awayScore}</span>
 				)}
 			</div>
-			{showKickoff && <div className="bracket-kickoff">{formatKickoff(m.date)}</div>}
 		</div>
 	);
 }
@@ -116,6 +160,10 @@ export function BracketView({
 	matches: KnockoutMatch[];
 	liveTeamIdxs: Set<number>;
 }) {
+	const matchById = useMemo(
+		() => new Map(matches.map((m) => [m.id, m])),
+		[matches],
+	);
 	const rounds = ROUND_ORDER.map((round) => ({
 		round,
 		matches: matches.filter((m) => m.round === round),
@@ -181,7 +229,7 @@ export function BracketView({
 										gridRow: `${i * span + 1} / span ${span}`,
 									}}
 								>
-									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} />
+									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} matchById={matchById} />
 								</div>
 							);
 						}),

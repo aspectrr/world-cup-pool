@@ -573,15 +573,36 @@ img {
 	animation: livePulse 1.2s ease-in-out infinite;
 	display: inline-block;
 }
-/* kickoff time shown under an unplayed match once at least one team resolved */
-.bracket-kickoff {
-	font-size: 0.58rem;
+/* feeder matchup preview replacing the old "Winner MXX" placeholder text */
+.seed-preview {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex: 1;
+	min-width: 0;
+	font-size: 0.55rem;
 	color: var(--text-dim);
-	text-align: center;
-	padding: 3px 0 1px;
 	font-variant-numeric: tabular-nums;
-	border-top: 1px solid rgba(255, 255, 255, 0.06);
-	margin-top: 2px;
+}
+.seed-preview img {
+	width: 14px;
+	height: 10px;
+	border-radius: 1px;
+	flex-shrink: 0;
+}
+.seed-preview .seed-abbr {
+	font-weight: 600;
+	color: var(--text);
+}
+.seed-preview .seed-vs {
+	opacity: 0.5;
+	font-size: 0.5rem;
+}
+.seed-preview .seed-time {
+	margin-left: auto;
+	opacity: 0.7;
+	font-size: 0.5rem;
+	white-space: nowrap;
 }
 .bracket-slot img {
 	width: 20px;
