@@ -551,6 +551,16 @@ img {
 .bracket-slot.live {
 	background: rgba(196, 30, 58, 0.1);
 }
+/* Live clock sits in the slot's top padding — keep that strip clear of
+ * the red tint so the clock reads against the card bg, not the tint.
+ * Away slot (no clock) stays fully tinted. */
+.bracket-slot.live:first-child:has(.bracket-live-clock) {
+	background: linear-gradient(
+		to bottom,
+		transparent 0 22px,
+		rgba(196, 30, 58, 0.1) 22px
+	);
+}
 /* single per-match live clock — transparent bg so the blinking dot
  * stands out against the faded-red live slot tint */
 .bracket-live-clock {
