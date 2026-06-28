@@ -33,13 +33,13 @@ function MatchCard({
 
 	return (
 		<div className="bracket-match">
-			{m.status === "live" && m.clock && (
-				<span className="bracket-live-clock">
-					<span className="live-pip" />
-					{m.clock}
-				</span>
-			)}
 			<div className={`bracket-slot${homeWon ? " winner" : ""}${homeLive ? " live" : ""}`}>
+				{m.status === "live" && m.clock && (
+					<span className="bracket-live-clock">
+						<span className="live-pip" />
+						{m.clock}
+					</span>
+				)}
 				{home ? (
 					<>
 						<img src={flagUrl(home.code)} alt={home.code} />
