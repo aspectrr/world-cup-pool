@@ -545,14 +545,30 @@ img {
 .bracket-slot.live {
 	background: rgba(196, 30, 58, 0.1);
 }
-.slot-live-dot {
-	width: 6px;
-	height: 6px;
+/* single per-match live clock — replaces the old per-slot dots */
+.bracket-live-clock {
+	position: absolute;
+	top: -8px;
+	right: 6px;
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	background: var(--bg);
+	color: var(--red);
+	font-size: 0.58rem;
+	font-weight: 700;
+	letter-spacing: 0.5px;
+	padding: 0 4px;
+	border-radius: 3px;
+	z-index: 1;
+}
+.bracket-live-clock .live-pip {
+	width: 5px;
+	height: 5px;
 	border-radius: 50%;
 	background: var(--red);
 	animation: livePulse 1.2s ease-in-out infinite;
 	display: inline-block;
-	flex-shrink: 0;
 }
 .bracket-slot img {
 	width: 20px;
