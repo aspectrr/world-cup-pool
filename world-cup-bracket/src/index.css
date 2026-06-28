@@ -529,6 +529,7 @@ img {
 	max-width: 100%;
 }
 .bracket-slot {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -536,25 +537,35 @@ img {
 	font-size: 0.78rem;
 	border-radius: 4px;
 }
+/* Live clock gets its own row above the team — only the home slot with
+ * a live clock gets extra top padding; idle cards stay tight. */
+.bracket-slot:first-child:has(.bracket-live-clock) {
+	padding-top: 16px;
+}
 .bracket-slot + .bracket-slot {
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .bracket-slot.winner {
 	background: rgba(26, 138, 58, 0.12);
 }
-.bracket-slot.live {
+/* When any slot is live, tint the whole match card red and keep the
+ * slots themselves clear — the card bg shows through. */
+.bracket-match:has(.bracket-slot.live) {
 	background: rgba(196, 30, 58, 0.1);
 }
-/* single per-match live clock — replaces the old per-slot dots */
+.bracket-slot.live {
+	background: transparent;
+}
+/* single per-match live clock — transparent bg so the blinking dot
+ * stands out against the faded-red live slot tint */
 .bracket-live-clock {
 	position: absolute;
 	top: 1px;
-	right: 4px;
+	right: 3px;
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
-	background: rgba(196, 30, 58, 0.9);
-	color: #fff;
+	color: var(--red);
 	font-size: 0.55rem;
 	font-weight: 700;
 	letter-spacing: 0.3px;
@@ -563,6 +574,7 @@ img {
 	z-index: 2;
 	line-height: 1.2;
 	pointer-events: none;
+	background: transparent;
 }
 .bracket-live-clock .live-pip {
 	width: 5px;
@@ -571,6 +583,36 @@ img {
 	background: var(--red);
 	animation: livePulse 1.2s ease-in-out infinite;
 	display: inline-block;
+}
+/* feeder matchup preview replacing the old "Winner MXX" placeholder text */
+.seed-preview {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex: 1;
+	min-width: 0;
+	font-size: 0.55rem;
+	color: var(--text-dim);
+	font-variant-numeric: tabular-nums;
+}
+.seed-preview img {
+	width: 14px;
+	height: 10px;
+	border-radius: 1px;
+	flex-shrink: 0;
+}
+.seed-preview .seed-abbr {
+	font-weight: 600;
+	color: var(--text);
+}
+.seed-preview .seed-vs {
+	opacity: 0.5;
+	font-size: 0.5rem;
+}
+.seed-preview .seed-time {
+	opacity: 0.7;
+	font-size: 0.48rem;
+	white-space: nowrap;
 }
 .bracket-slot img {
 	width: 20px;
