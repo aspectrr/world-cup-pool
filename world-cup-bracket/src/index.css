@@ -523,7 +523,7 @@ img {
 	position: relative;
 	background: var(--card);
 	border-radius: 10px;
-	padding: 10px 8px 8px;
+	padding: 8px;
 	box-shadow: var(--shadow-card);
 	width: var(--bracket-match-w, 180px);
 	max-width: 100%;
@@ -533,13 +533,12 @@ img {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 5px 8px;
+	padding: 4px 6px;
 	font-size: 0.78rem;
 	border-radius: 4px;
 }
-/* Live clock gets its own row above the team — push the home slot's
- * content down so the clock has breathing room from the container top
- * and from the flag/name below it. */
+/* Live clock gets its own row above the team — only the home slot with
+ * a live clock gets extra top padding; idle cards stay tight. */
 .bracket-slot:first-child:has(.bracket-live-clock) {
 	padding-top: 22px;
 }
@@ -556,8 +555,8 @@ img {
  * stands out against the faded-red live slot tint */
 .bracket-live-clock {
 	position: absolute;
-	top: 3px;
-	right: 6px;
+	top: 1px;
+	right: 4px;
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
