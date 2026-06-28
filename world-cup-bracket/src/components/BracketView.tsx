@@ -35,10 +35,7 @@ function MatchCard({
 		<div className="bracket-match">
 			<div className={`bracket-slot${homeWon ? " winner" : ""}${homeLive ? " live" : ""}`}>
 				{m.status === "live" && m.clock && (
-					<span className="bracket-live-clock">
-						<span className="live-pip" />
-						{m.clock}
-					</span>
+					<span className="bracket-live-clock">{m.clock}</span>
 				)}
 				{home ? (
 					<>

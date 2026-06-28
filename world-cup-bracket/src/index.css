@@ -545,16 +545,12 @@ img {
 .bracket-slot.live {
 	background: rgba(196, 30, 58, 0.1);
 }
-/* single per-match live clock — replaces the old per-slot dots */
+/* single per-match live clock — faded red bg matching the slot tint */
 .bracket-live-clock {
 	position: absolute;
 	top: 1px;
 	right: 4px;
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
-	background: rgba(196, 30, 58, 0.9);
-	color: #fff;
+	color: var(--red);
 	font-size: 0.55rem;
 	font-weight: 700;
 	letter-spacing: 0.3px;
@@ -563,14 +559,7 @@ img {
 	z-index: 2;
 	line-height: 1.2;
 	pointer-events: none;
-}
-.bracket-live-clock .live-pip {
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: var(--red);
-	animation: livePulse 1.2s ease-in-out infinite;
-	display: inline-block;
+	background: transparent;
 }
 .bracket-slot img {
 	width: 20px;

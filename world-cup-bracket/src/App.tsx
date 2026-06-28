@@ -190,42 +190,23 @@ export default function App() {
 		}
 		const R32_START = "2026-06-28T00:00:00Z";
 
-		return initKnockoutMatches.map((m) => {
-			if (m.round !== "R32") {
-				// R16/QF/SF/FINAL: merge live score if both feeders resolved and
-				// the server has a result for this team pairing in the knockout
-				// window. Indices come from prior R32 winners — but we don't yet
-				// propagate winners forward here, so non-R32 matches stay as the
-				// skeleton until ESPN lists them directly.
-				return m;
-			}
-			const slot = R32_SLOTS.find((s) => s.id === m.id);
-			if (!slot) return m;
-			const filled = r32.get(m.id);
-			if (!filled) return m;
-			const [homeIdx, awayIdx] = filled;
-			const tg = thirdGroupFor.get(m.id) ?? null;
-			const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
-			const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
+		// Walk matches in array order (R32 → FINAL) so winners register before
+		// downstream matches that reference them via "Winner MXX" seed labels.
+		const winnerOf = new Map<string, number | null>();
 
-			// Merge live score for this R32 pairing.
-			const sm =
-				homeIdx !== null && awayIdx !== null
-					? byTeams.get(`${homeIdx}v${awayIdx}`)
-					: undefined;
-			if (!sm || sm.date < R32_START) {
-				return { ...m, homeIdx, awayIdx, homeSeed, awaySeed };
-			}
+		// Merge a server result into a resolved matchup. Returns the patch fields
+		// (or null if no server data for this pairing).
+		const mergeLive = (
+			homeIdx: number,
+			awayIdx: number,
+		): Partial<KnockoutMatch> | null => {
+			const sm = byTeams.get(`${homeIdx}v${awayIdx}`);
+			if (!sm || sm.date < R32_START) return null;
 			const isReversed = sm.home_idx === awayIdx;
 			const homeScore = isReversed ? sm.away_score : sm.home_score;
 			const awayScore = isReversed ? sm.home_score : sm.away_score;
 			const played = sm.status === "finished" || sm.status === "live";
 			return {
-				...m,
-				homeIdx,
-				awayIdx,
-				homeSeed,
-				awaySeed,
 				homeScore,
 				awayScore,
 				played,
@@ -233,6 +214,63 @@ export default function App() {
 				clock: sm.clock,
 				date: sm.date,
 			};
+		};
+
+		return initKnockoutMatches.map((m): KnockoutMatch => {
+			if (m.round === "R32") {
+				const slot = R32_SLOTS.find((s) => s.id === m.id);
+				if (!slot) return m;
+				const filled = r32.get(m.id);
+				if (!filled) return m;
+				const [homeIdx, awayIdx] = filled;
+				const tg = thirdGroupFor.get(m.id) ?? null;
+				const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
+				const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
+				const base: KnockoutMatch = { ...m, homeIdx, awayIdx, homeSeed, awaySeed };
+				if (homeIdx !== null && awayIdx !== null) {
+					const live = mergeLive(homeIdx, awayIdx);
+					if (live) Object.assign(base, live);
+				}
+				// Register winner for downstream matches.
+				winnerOf.set(
+					m.id,
+					base.played &&
+						base.homeScore !== null &&
+						base.awayScore !== null &&
+						base.status !== "live"
+						? base.homeScore > base.awayScore
+							? homeIdx
+							: base.awayScore > base.homeScore
+								? awayIdx
+								: null
+						: null,
+				);
+				return base;
+			}
+
+			// R16/QF/SF/FINAL: feeders referenced via "Winner MXX" seeds.
+			const homeFeeder = m.homeSeed.match(/Winner (\w+)/)?.[1] ?? null;
+			const awayFeeder = m.awaySeed.match(/Winner (\w+)/)?.[1] ?? null;
+			const homeIdx = homeFeeder ? (winnerOf.get(homeFeeder) ?? null) : null;
+			const awayIdx = awayFeeder ? (winnerOf.get(awayFeeder) ?? null) : null;
+			if (homeIdx === null || awayIdx === null) return m;
+			const base: KnockoutMatch = { ...m, homeIdx, awayIdx };
+			const live = mergeLive(homeIdx, awayIdx);
+			if (live) Object.assign(base, live);
+			winnerOf.set(
+				m.id,
+				base.played &&
+					base.homeScore !== null &&
+					base.awayScore !== null &&
+					base.status !== "live"
+					? base.homeScore > base.awayScore
+						? homeIdx
+						: base.awayScore > base.homeScore
+							? awayIdx
+							: null
+					: null,
+			);
+			return base;
 		});
 	}, [gMatches, clinchedWinners, live.matches]);
 
