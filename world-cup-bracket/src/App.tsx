@@ -75,11 +75,11 @@ export default function App() {
 		return () => window.removeEventListener("hashchange", onHash);
 	}, []);
 	const [gMatches, setGMatches] = useState<GroupMatch[]>(initGroupMatches);
-	const [kMatches, setKMatches] =
-		useState<KnockoutMatch[]>(initKnockoutMatches);
 	const live = useESPNLive();
 
-	// Merge server results into group matches
+	// Merge server results into group matches only — knockout matches are
+	// derived (below) so populateR32 + live scores resolve in a single render
+	// instead of cascading through two setKMatches effects.
 	useEffect(() => {
 		if (live.matches.length === 0) return;
 
@@ -107,49 +107,6 @@ export default function App() {
 					m.played === played &&
 					m.homeScore === homeScore &&
 					m.awayScore === awayScore
-				) {
-					return m;
-				}
-
-				changed = true;
-				return {
-					...m,
-					homeScore,
-					awayScore,
-					played,
-					status: sm.status,
-					clock: sm.clock,
-					date: sm.date,
-				};
-			});
-
-			return changed ? updated : prev;
-		});
-
-		// Merge live results into knockout matches. Server keys by team-idx pair
-		// with no round discriminator, so a group-stage result (pre-Jun-28) could
-		// collide with a later knockout matchup of the same teams. Filter server
-		// entries to the knockout window to avoid that.
-		const R32_START = "2026-06-28T00:00:00Z";
-		setKMatches((prev) => {
-			let changed = false;
-			const updated = prev.map((m) => {
-				if (m.homeIdx === null || m.awayIdx === null) return m;
-				const sm = byTeams.get(`${m.homeIdx}v${m.awayIdx}`);
-				if (!sm || sm.date < R32_START) return m;
-
-				const isReversed = sm.home_idx === m.awayIdx;
-				const homeScore = isReversed ? sm.away_score : sm.home_score;
-				const awayScore = isReversed ? sm.home_score : sm.away_score;
-				const played = sm.status === "finished" || sm.status === "live";
-
-				if (
-					m.status === sm.status &&
-					m.played === played &&
-					m.homeScore === homeScore &&
-					m.awayScore === awayScore &&
-					m.clock === sm.clock &&
-					m.date === sm.date
 				) {
 					return m;
 				}
@@ -201,55 +158,83 @@ export default function App() {
 		[gMatches],
 	);
 
-	// Auto-populate R32 from group results. Lifted to App so the bracket
-	// populates regardless of which tab is active (Games tab reads kMatches
-	// too and was missing knockout matchups until the user visited Bracket).
-	// Pure derivation lives in populateR32; this merges the result into state.
-	useEffect(() => {
-		// eslint-disable-next-line react-hooks/set-state-in-effect -- syncing derived data via functional updater
-		setKMatches((prev) => {
-			const r32 = populateR32(gMatches, clinchedWinners);
+	// Knockout matches derived in a single pass: R32 seeded from group results
+	// via populateR32, then live scores/status/clock merged from the server.
+	// Previously this was split across two setKMatches effects that cascaded —
+	// live merge ran before populateR32 filled homeIdx/awayIdx, so R32 scores
+	// only appeared on the next 30s poll. Deriving here resolves both in one
+	// render so the bracket is current as soon as data lands.
+	const kMatches = useMemo<KnockoutMatch[]>(() => {
+		const r32 = populateR32(gMatches, clinchedWinners);
 
-			// Re-seed labels too (third-place slots resolve once groups end).
-			// ponytail: assumes R32_SLOTS ordering matches generateKnockoutMatches.
-			const thirdGroupFor = new Map<string, string | null>();
-			for (const slot of R32_SLOTS) {
-				const filled = r32.get(slot.id);
-				thirdGroupFor.set(
-					slot.id,
-					filled && slot.home.kind === "3"
-						? groupLetterOf(filled[0])
-						: filled && slot.away.kind === "3"
-							? groupLetterOf(filled[1])
-							: null,
-				);
+		// Re-seed labels too (third-place slots resolve once groups end).
+		// ponytail: assumes R32_SLOTS ordering matches generateKnockoutMatches.
+		const thirdGroupFor = new Map<string, string | null>();
+		for (const slot of R32_SLOTS) {
+			const filled = r32.get(slot.id);
+			thirdGroupFor.set(
+				slot.id,
+				filled && slot.home.kind === "3"
+					? groupLetterOf(filled[0])
+					: filled && slot.away.kind === "3"
+						? groupLetterOf(filled[1])
+						: null,
+			);
+		}
+
+		// Server lookup by team-idx pair (both directions).
+		const byTeams = new Map<string, ServerMatch>();
+		for (const sm of live.matches) {
+			byTeams.set(`${sm.home_idx}v${sm.away_idx}`, sm);
+			byTeams.set(`${sm.away_idx}v${sm.home_idx}`, sm);
+		}
+		const R32_START = "2026-06-28T00:00:00Z";
+
+		return initKnockoutMatches.map((m) => {
+			if (m.round !== "R32") {
+				// R16/QF/SF/FINAL: merge live score if both feeders resolved and
+				// the server has a result for this team pairing in the knockout
+				// window. Indices come from prior R32 winners — but we don't yet
+				// propagate winners forward here, so non-R32 matches stay as the
+				// skeleton until ESPN lists them directly.
+				return m;
 			}
+			const slot = R32_SLOTS.find((s) => s.id === m.id);
+			if (!slot) return m;
+			const filled = r32.get(m.id);
+			if (!filled) return m;
+			const [homeIdx, awayIdx] = filled;
+			const tg = thirdGroupFor.get(m.id) ?? null;
+			const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
+			const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
 
-			let changed = false;
-			const updated = prev.map((m) => {
-				if (m.round !== "R32") return m;
-				const slot = R32_SLOTS.find((s) => s.id === m.id);
-				if (!slot) return m;
-				const filled = r32.get(m.id);
-				if (!filled) return m;
-				const [home, away] = filled;
-				const tg = thirdGroupFor.get(m.id) ?? null;
-				const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
-				const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
-				if (
-					m.homeIdx === home &&
-					m.awayIdx === away &&
-					m.homeSeed === homeSeed &&
-					m.awaySeed === awaySeed
-				) {
-					return m;
-				}
-				changed = true;
-				return { ...m, homeIdx: home, awayIdx: away, homeSeed, awaySeed };
-			});
-			return changed ? updated : prev;
+			// Merge live score for this R32 pairing.
+			const sm =
+				homeIdx !== null && awayIdx !== null
+					? byTeams.get(`${homeIdx}v${awayIdx}`)
+					: undefined;
+			if (!sm || sm.date < R32_START) {
+				return { ...m, homeIdx, awayIdx, homeSeed, awaySeed };
+			}
+			const isReversed = sm.home_idx === awayIdx;
+			const homeScore = isReversed ? sm.away_score : sm.home_score;
+			const awayScore = isReversed ? sm.home_score : sm.away_score;
+			const played = sm.status === "finished" || sm.status === "live";
+			return {
+				...m,
+				homeIdx,
+				awayIdx,
+				homeSeed,
+				awaySeed,
+				homeScore,
+				awayScore,
+				played,
+				status: sm.status,
+				clock: sm.clock,
+				date: sm.date,
+			};
 		});
-	}, [groupStageDone, gMatches, clinchedWinners]);
+	}, [gMatches, clinchedWinners, live.matches]);
 
 	// Bracket tab is visible once any group winner has clinched OR the group
 	// stage is complete. If user lands on bracket before either, fall back.
