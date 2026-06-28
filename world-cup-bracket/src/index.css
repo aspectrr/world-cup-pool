@@ -615,9 +615,8 @@ img {
 	font-size: 0.5rem;
 }
 .seed-preview .seed-time {
-	margin-left: auto;
 	opacity: 0.7;
-	font-size: 0.5rem;
+	font-size: 0.48rem;
 	white-space: nowrap;
 }
 .bracket-slot img {
