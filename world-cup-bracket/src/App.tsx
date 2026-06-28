@@ -1,31 +1,47 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Tab, GroupMatch, KnockoutMatch } from "./types";
-import { generateGroupMatches, generateKnockoutMatches } from "./data/bracket";
+import {
+	generateGroupMatches,
+	generateKnockoutMatches,
+	populateR32,
+	R32_SLOTS,
+	seedLabel,
+	type SeedSpec,
+} from "./data/bracket";
 import { GROUP_SCHEDULE, KNOCKOUT_SCHEDULE } from "./data/schedule";
 import { useESPNLive } from "./hooks/useESPNLive";
 import type { ServerMatch } from "./hooks/useESPNLive";
 import { Standings } from "./components/Standings";
-import { GroupsView } from "./components/GroupsView";
 import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
 import { getAdvancingTeams, getClinchedGroupWinners } from "./utils/standings";
+import { TEAMS } from "./data/teams";
 
 const HASH_MAP: Record<string, Tab> = {
 	"": "standings",
 	standings: "standings",
-	groups: "groups",
 	games: "games",
 	bracket: "bracket",
 	"my-teams": "my-teams",
 };
 const TAB_HASH: Record<Tab, string> = {
 	standings: "standings",
-	groups: "groups",
 	games: "games",
 	bracket: "bracket",
 	"my-teams": "my-teams",
 };
+
+function groupLetterOf(idx: number | null): string | null {
+	if (idx === null) return null;
+	return TEAMS[idx].group;
+}
+
+// When the seed is a third-place slot, return the resolved group letter;
+// otherwise return null (the label ignores it for winner/runner specs).
+function groupLetterOfIfThird(spec: SeedSpec, tg: string | null): string | null {
+	return spec.kind === "3" ? tg : null;
+}
 
 function tabFromHash(): Tab {
 	const h = window.location.hash.replace("#", "");
@@ -172,7 +188,7 @@ export default function App() {
 
 	// Teams advancing to R32: live snapshot during group stage (top-2 + best
 	// 8 thirds on current form), final answer once groups are done. Used to
-	// highlight advancing rows in GroupsView and MyTeams position badges.
+	// highlight advancing rows in MyTeams position badges.
 	const advancing = useMemo(
 		() => getAdvancingTeams(gMatches),
 		[gMatches],
@@ -184,6 +200,56 @@ export default function App() {
 		() => getClinchedGroupWinners(gMatches),
 		[gMatches],
 	);
+
+	// Auto-populate R32 from group results. Lifted to App so the bracket
+	// populates regardless of which tab is active (Games tab reads kMatches
+	// too and was missing knockout matchups until the user visited Bracket).
+	// Pure derivation lives in populateR32; this merges the result into state.
+	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- syncing derived data via functional updater
+		setKMatches((prev) => {
+			const r32 = populateR32(gMatches, clinchedWinners);
+
+			// Re-seed labels too (third-place slots resolve once groups end).
+			// ponytail: assumes R32_SLOTS ordering matches generateKnockoutMatches.
+			const thirdGroupFor = new Map<string, string | null>();
+			for (const slot of R32_SLOTS) {
+				const filled = r32.get(slot.id);
+				thirdGroupFor.set(
+					slot.id,
+					filled && slot.home.kind === "3"
+						? groupLetterOf(filled[0])
+						: filled && slot.away.kind === "3"
+							? groupLetterOf(filled[1])
+							: null,
+				);
+			}
+
+			let changed = false;
+			const updated = prev.map((m) => {
+				if (m.round !== "R32") return m;
+				const slot = R32_SLOTS.find((s) => s.id === m.id);
+				if (!slot) return m;
+				const filled = r32.get(m.id);
+				if (!filled) return m;
+				const [home, away] = filled;
+				const tg = thirdGroupFor.get(m.id) ?? null;
+				const homeSeed = seedLabel(slot.home, groupLetterOfIfThird(slot.home, tg));
+				const awaySeed = seedLabel(slot.away, groupLetterOfIfThird(slot.away, tg));
+				if (
+					m.homeIdx === home &&
+					m.awayIdx === away &&
+					m.homeSeed === homeSeed &&
+					m.awaySeed === awaySeed
+				) {
+					return m;
+				}
+				changed = true;
+				return { ...m, homeIdx: home, awayIdx: away, homeSeed, awaySeed };
+			});
+			return changed ? updated : prev;
+		});
+	}, [groupStageDone, gMatches, clinchedWinners]);
 
 	// Bracket tab is visible once any group winner has clinched OR the group
 	// stage is complete. If user lands on bracket before either, fall back.
@@ -212,12 +278,6 @@ export default function App() {
 					onClick={() => navigate("standings")}
 				>
 					Standings
-				</button>
-				<button
-					className={`tab-btn${effectiveTab === "groups" ? " active" : ""}`}
-					onClick={() => navigate("groups")}
-				>
-					Groups
 				</button>
 				<button
 					className={`tab-btn${effectiveTab === "games" ? " active" : ""}`}
@@ -251,18 +311,12 @@ export default function App() {
 			{effectiveTab === "standings" && (
 				<Standings gMatches={gMatches} kMatches={kMatches} />
 			)}
-			{effectiveTab === "groups" && (
-				<GroupsView matches={gMatches} advancing={advancing} />
-			)}
 			{effectiveTab === "games" && (
 				<GamesView gMatches={gMatches} kMatches={kMatches} />
 			)}
 			{effectiveTab === "bracket" && (
 				<BracketView
 					matches={kMatches}
-					setMatches={setKMatches}
-					gMatches={gMatches}
-					clinchedWinners={clinchedWinners}
 					liveTeamIdxs={liveTeamIdxs}
 				/>
 			)}
