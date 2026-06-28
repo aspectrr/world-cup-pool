@@ -540,7 +540,7 @@ img {
 /* Live clock gets its own row above the team — only the home slot with
  * a live clock gets extra top padding; idle cards stay tight. */
 .bracket-slot:first-child:has(.bracket-live-clock) {
-	padding-top: 22px;
+	padding-top: 16px;
 }
 .bracket-slot + .bracket-slot {
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -548,25 +548,20 @@ img {
 .bracket-slot.winner {
 	background: rgba(26, 138, 58, 0.12);
 }
-.bracket-slot.live {
+/* When any slot is live, tint the whole match card red and keep the
+ * slots themselves clear — the card bg shows through. */
+.bracket-match:has(.bracket-slot.live) {
 	background: rgba(196, 30, 58, 0.1);
 }
-/* Live clock sits in the slot's top padding — keep that strip clear of
- * the red tint so the clock reads against the card bg, not the tint.
- * Away slot (no clock) stays fully tinted. */
-.bracket-slot.live:first-child:has(.bracket-live-clock) {
-	background: linear-gradient(
-		to bottom,
-		transparent 0 22px,
-		rgba(196, 30, 58, 0.1) 22px
-	);
+.bracket-slot.live {
+	background: transparent;
 }
 /* single per-match live clock — transparent bg so the blinking dot
  * stands out against the faded-red live slot tint */
 .bracket-live-clock {
 	position: absolute;
 	top: 1px;
-	right: 4px;
+	right: 3px;
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
