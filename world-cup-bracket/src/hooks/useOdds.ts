@@ -17,14 +17,50 @@ export interface OddsResponse {
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 const POLL_INTERVAL = 60_000; // backend polls Polymarket every 60s
 
+// SWR cache — see useESPNLive for rationale.
+const CACHE_KEY = "wc2026:odds:v1";
+
+interface CachedOdds {
+	odds: Record<string, MatchOdds>;
+	savedAt: string;
+}
+
+function readCache(): CachedOdds | null {
+	try {
+		const raw = localStorage.getItem(CACHE_KEY);
+		if (!raw) return null;
+		const parsed = JSON.parse(raw) as CachedOdds;
+		if (!parsed.odds || typeof parsed.odds !== "object") return null;
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+function writeCache(odds: Record<string, MatchOdds>): void {
+	try {
+		localStorage.setItem(
+			CACHE_KEY,
+			JSON.stringify({ odds, savedAt: new Date().toISOString() }),
+		);
+	} catch {
+		// best-effort
+	}
+}
+
 /** Canonical pair key — order-independent so callers don't worry about home/away. */
 export function oddsKey(a: number, b: number): string {
 	return a < b ? `${a}v${b}` : `${b}v${a}`;
 }
 
 export function useOdds() {
-	const [odds, setOdds] = useState<Record<string, MatchOdds>>({});
-	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+	const [odds, setOdds] = useState<Record<string, MatchOdds>>(
+		() => readCache()?.odds ?? {},
+	);
+	const [lastUpdated, setLastUpdated] = useState<Date | null>(() => {
+		const c = readCache();
+		return c ? new Date(c.savedAt) : null;
+	});
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -40,6 +76,7 @@ export function useOdds() {
 			.then((data) => {
 				setOdds(data.odds ?? {});
 				setLastUpdated(new Date());
+				writeCache(data.odds ?? {});
 				if (data.error) setError(data.error);
 			})
 			.catch((e) => {
