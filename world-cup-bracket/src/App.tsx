@@ -16,6 +16,7 @@ import { Standings } from "./components/Standings";
 import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
 import { MyTeams } from "./components/MyTeams";
+import { Skeleton } from "./components/Skeleton";
 import { getAdvancingTeams, getClinchedGroupWinners } from "./utils/standings";
 import { TEAMS } from "./data/teams";
 
@@ -345,28 +346,37 @@ export default function App() {
 				</div>
 			)}
 
-			{effectiveTab === "standings" && (
-				<Standings gMatches={gMatches} kMatches={kMatches} />
-			)}
-			{effectiveTab === "games" && (
-				<GamesView
-					gMatches={gMatches}
-					kMatches={kMatches}
-					odds={oddsData.odds}
-				/>
-			)}
-			{effectiveTab === "bracket" && (
-				<BracketView
-					matches={kMatches}
-					liveTeamIdxs={liveTeamIdxs}
-				/>
-			)}
-			{effectiveTab === "my-teams" && (
-				<MyTeams
-					gMatches={gMatches}
-					kMatches={kMatches}
-					advancing={advancing}
-				/>
+			{/* Cold-load skeleton: only before any data (cached or fetched) exists.
+				 On refresh, localStorage hydrates the hooks so `matches` is populated
+				 instantly and this branch never fires. */}
+			{live.loading && live.matches.length === 0 ? (
+				<Skeleton />
+			) : (
+				<>
+					{effectiveTab === "standings" && (
+						<Standings gMatches={gMatches} kMatches={kMatches} />
+					)}
+					{effectiveTab === "games" && (
+						<GamesView
+							gMatches={gMatches}
+							kMatches={kMatches}
+							odds={oddsData.odds}
+						/>
+					)}
+					{effectiveTab === "bracket" && (
+						<BracketView
+							matches={kMatches}
+							liveTeamIdxs={liveTeamIdxs}
+						/>
+					)}
+					{effectiveTab === "my-teams" && (
+						<MyTeams
+							gMatches={gMatches}
+							kMatches={kMatches}
+							advancing={advancing}
+						/>
+					)}
+				</>
 			)}
 		</div>
 	);
