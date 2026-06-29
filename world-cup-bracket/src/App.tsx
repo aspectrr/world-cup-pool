@@ -9,9 +9,8 @@ import {
 	type SeedSpec,
 } from "./data/bracket";
 import { GROUP_SCHEDULE, KNOCKOUT_SCHEDULE } from "./data/schedule";
-import { useESPNLive } from "./hooks/useESPNLive";
-import { useOdds } from "./hooks/useOdds";
-import type { ServerMatch } from "./hooks/useESPNLive";
+import { useLive } from "./hooks/useLive";
+import type { ServerMatch } from "./hooks/useLive";
 import { Standings } from "./components/Standings";
 import { GamesView } from "./components/GamesView";
 import { BracketView } from "./components/BracketView";
@@ -77,8 +76,7 @@ export default function App() {
 		return () => window.removeEventListener("hashchange", onHash);
 	}, []);
 	const [gMatches, setGMatches] = useState<GroupMatch[]>(initGroupMatches);
-	const live = useESPNLive();
-	const oddsData = useOdds();
+	const live = useLive();
 
 	// Merge server results into group matches only — knockout matches are
 	// derived (below) so populateR32 + live scores resolve in a single render
@@ -360,7 +358,7 @@ export default function App() {
 						<GamesView
 							gMatches={gMatches}
 							kMatches={kMatches}
-							odds={oddsData.odds}
+							odds={live.odds}
 						/>
 					)}
 					{effectiveTab === "bracket" && (

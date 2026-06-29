@@ -7,6 +7,7 @@
 import express from "express";
 import cors from "cors";
 import Database from "better-sqlite3";
+import { WebSocketServer, WebSocket } from "ws";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -181,7 +182,9 @@ const getAllStmt = db.prepare("SELECT * FROM results");
 
 const SCOREBOARD_URL =
 	"https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
-const POLL_INTERVAL = 60_000;
+// 20s — ESPN's REST cache floor. Faster wastes requests for stale data.
+// The client WS broadcast (below) is what actually kills perceived latency.
+const POLL_INTERVAL = 20_000;
 
 interface StoredMatch {
 	match_id: string;
@@ -236,6 +239,7 @@ async function pollESPN(): Promise<void> {
 		console.log(
 			`[poll] ${new Date().toISOString()} — ${matches.length} from ESPN, ${toSave.length} finished saved to DB`,
 		);
+		broadcast({ type: "matches", payload: buildResults() });
 	} catch (e) {
 		pollError = e instanceof Error ? e.message : "Unknown error";
 		console.error(`[poll] ${new Date().toISOString()} — ${pollError}`);
@@ -280,10 +284,11 @@ function buildResults() {
 	};
 }
 
-// ── Polymarket odds ─────────────────────────────────────────────────
-// Public, keyless Gamma API. Each WC match is one event with three binary
-// markets: "Will {Home} win?", "Will it end in a draw?", "Will {Away} win?".
-// The Yes price of each ≈ implied probability (they sum to ~1.0 minus vig).
+// ── Polymarket odds (via CLOB market WebSocket) ────────────────────
+// We subscribe to wss://ws-subscriptions-clob.polymarket.com/ws/market for
+// best_bid_ask events on each WC market's Yes token. Mid-price = implied
+// probability. Token IDs are bootstrapped from Gamma REST every few minutes
+// (and on startup) so newly-created fixtures appear without a redeploy.
 
 // 48 WC team names — kept in sync with world-cup-bracket/src/data/teams.ts.
 // ponytail: duplicated from the frontend rather than shared, to keep the
@@ -338,6 +343,7 @@ interface PmMarket {
 	question: string;
 	outcomes: string; // JSON-encoded, e.g. '["Yes","No"]'
 	outcomePrices: string; // JSON-encoded
+	clobTokenIds: string; // JSON-encoded: [yesTokenId, noTokenId]
 }
 
 interface PmEvent {
@@ -362,12 +368,48 @@ let oddsLastPoll: Date | null = null;
 let oddsError: string | null = null;
 
 const GAMMA_EVENTS_URL = "https://gamma-api.polymarket.com/events";
-const ODDS_POLL_INTERVAL = 5_000;
+const PM_WS_URL = "wss://ws-subscriptions-clob.polymarket.com/ws/market";
+// Re-bootstrap token IDs from Gamma every few minutes so newly-listed
+// fixtures get picked up without a redeploy. Cheap (single REST call).
+const BOOTSTRAP_INTERVAL = 5 * 60_000;
+// Broadcast no more than once per second — best_bid_ask fires ~1Hz per token,
+// and batching drops needless client traffic.
+const BROADCAST_THROTTLE = 1_000;
 
 // Skip derivative event variants — we only want the base moneyline event.
 const PM_VARIANT = /(more-markets|exact-score|total-corners|player-props|both-teams-to-score)/;
 
-async function pollPolymarket(): Promise<void> {
+// token_id → which match/side it represents.
+interface TokenMeta {
+	pairKey: string;
+	teamIdx: number; // -1 for the draw token
+}
+const tokenIndex = new Map<string, TokenMeta>();
+// pairKey → { home, away, draw } token IDs for assembling MatchOdds.
+const pairTokens = new Map<string, { home?: string; away?: string; draw?: string }>();
+// token_id → latest mid price (implied prob).
+const tokenMids = new Map<string, number>();
+
+let pmWs: WebSocket | null = null;
+let pmPingTimer: ReturnType<typeof setInterval> | null = null;
+let oddsDirty = false;
+let oddsBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
+
+function parseYesToken(m: PmMarket): string | null {
+	try {
+		const outcomes = JSON.parse(m.outcomes) as string[];
+		const clobIds = JSON.parse(m.clobTokenIds) as string[];
+		const yesIdx = outcomes.indexOf("Yes");
+		return yesIdx >= 0 ? clobIds[yesIdx] ?? null : null;
+	} catch {
+		return null;
+	}
+}
+
+// Pull WC fixtures from Gamma and rebuild token map. Idempotent; safe to
+// call on a timer. New tokens get WS-subscribed on the next reconnect or
+// via a dynamic subscribe if the socket is already open.
+async function bootstrapTokens(): Promise<void> {
 	try {
 		const url =
 			`${GAMMA_EVENTS_URL}?limit=300&closed=false` +
@@ -376,69 +418,169 @@ async function pollPolymarket(): Promise<void> {
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
 		const events = (await res.json()) as PmEvent[];
 
-		const out: Record<string, MatchOdds> = {};
+		const newPairTokens = new Map<string, { home?: string; away?: string; draw?: string }>();
+		const newTokenIndex = new Map<string, TokenMeta>();
+
 		for (const ev of events) {
 			if (!ev.slug.startsWith("fifwc-")) continue;
 			if (PM_VARIANT.test(ev.slug)) continue;
 
-			// Title shape: "Home vs. Away" (or "Home vs Away").
 			const parts = ev.title.split(/\s+vs\.?\s+/);
 			if (parts.length !== 2) continue;
 			const homeIdx = pmTeamIdx(parts[0]);
 			const awayIdx = pmTeamIdx(parts[1]);
 			if (homeIdx === null || awayIdx === null) continue;
-
-			const pcts: Record<number, number> = {};
-			let draw: number | null = null;
-
-			const parseJson = <T,>(s: string | undefined): T[] => {
-				if (!s) return [];
-				try {
-					const v = JSON.parse(s);
-					return Array.isArray(v) ? (v as T[]) : [];
-				} catch {
-					return []
-				}
-			};
+			const key = pairKey(homeIdx, awayIdx);
+			const entry: { home?: string; away?: string; draw?: string } = {};
 
 			for (const m of ev.markets ?? []) {
-				const outcomes = parseJson<string>(m.outcomes);
-				const prices = parseJson<string>(m.outcomePrices);
-				const yesIdx = outcomes.indexOf("Yes");
-				const yes = yesIdx >= 0 ? Number(prices[yesIdx]) : NaN;
-				if (!Number.isFinite(yes)) continue;
-
+				const yesTid = parseYesToken(m);
+				if (!yesTid) continue;
 				const winMatch = m.question.match(/^Will (.+?) win on /);
 				if (winMatch) {
 					const idx = pmTeamIdx(winMatch[1]);
-					if (idx !== null) pcts[idx] = yes;
-					continue;
+					if (idx === null) continue;
+					if (idx === homeIdx) { entry.home = yesTid; newTokenIndex.set(yesTid, { pairKey: key, teamIdx: homeIdx }); }
+					else if (idx === awayIdx) { entry.away = yesTid; newTokenIndex.set(yesTid, { pairKey: key, teamIdx: awayIdx }); }
+				} else if (/draw/i.test(m.question)) {
+					entry.draw = yesTid;
+					newTokenIndex.set(yesTid, { pairKey: key, teamIdx: -1 });
 				}
-				if (/draw/i.test(m.question)) draw = yes;
 			}
-
-			// Only emit if we resolved both win prices.
-			if (pcts[homeIdx] === undefined || pcts[awayIdx] === undefined) continue;
-			out[pairKey(homeIdx, awayIdx)] = {
-				pcts,
-				draw: draw ?? 0,
-			};
+			if (entry.home && entry.away) newPairTokens.set(key, entry);
 		}
 
-		oddsCache = out;
-		oddsLastPoll = new Date();
+		const added = [...newTokenIndex.keys()].filter((t) => !tokenIndex.has(t));
+		const dropped = [...tokenIndex.keys()].filter((t) => !newTokenIndex.has(t));
+
+		tokenIndex.clear();
+		for (const [k, v] of newTokenIndex) tokenIndex.set(k, v);
+		pairTokens.clear();
+		for (const [k, v] of newPairTokens) pairTokens.set(k, v);
+		for (const t of dropped) tokenMids.delete(t);
+
 		oddsError = null;
 		console.log(
-			`[odds] ${new Date().toISOString()} — priced ${Object.keys(out).length} matches`,
+			`[odds] ${new Date().toISOString()} — bootstrap ${pairTokens.size} matches, ${tokenIndex.size} tokens (+${added.length} -${dropped.length})`,
 		);
+
+		// Dynamic subscribe to new tokens without reconnecting.
+		if (added.length && pmWs?.readyState === WebSocket.OPEN) {
+			pmWs.send(JSON.stringify({
+				assets_ids: added,
+				type: "market",
+				custom_feature_enabled: true,
+			}));
+		}
 	} catch (e) {
 		oddsError = e instanceof Error ? e.message : "Unknown error";
-		console.error(`[odds] ${new Date().toISOString()} — ${oddsError}`);
+		console.error(`[odds] bootstrap failed: ${oddsError}`);
 	}
 }
 
-pollPolymarket();
-setInterval(pollPolymarket, ODDS_POLL_INTERVAL);
+// Recompute a pair's MatchOdds from stored token mids.
+function recomputePair(key: string): MatchOdds | null {
+	const entry = pairTokens.get(key);
+	if (!entry?.home || !entry.away) return null;
+	const homeMid = tokenMids.get(entry.home);
+	const awayMid = tokenMids.get(entry.away);
+	if (homeMid === undefined || awayMid === undefined) return null;
+	const pcts: Record<number, number> = {};
+	const homeMeta = tokenIndex.get(entry.home);
+	const awayMeta = tokenIndex.get(entry.away);
+	if (homeMeta) pcts[homeMeta.teamIdx] = homeMid;
+	if (awayMeta) pcts[awayMeta.teamIdx] = awayMid;
+	const draw = entry.draw ? tokenMids.get(entry.draw) ?? 0 : 0;
+	return { pcts, draw };
+}
+
+// Update one token's mid, recompute its pair, mark dirty for broadcast.
+function onTopOfBook(tokenId: string, bid: number, ask: number): void {
+	if (!Number.isFinite(bid) || !Number.isFinite(ask)) return;
+	const meta = tokenIndex.get(tokenId);
+	if (!meta) return; // not a WC token (e.g. echo from a previous cycle)
+	tokenMids.set(tokenId, (bid + ask) / 2);
+	const updated = recomputePair(meta.pairKey);
+	if (updated) {
+		oddsCache[meta.pairKey] = updated;
+		oddsLastPoll = new Date();
+		oddsError = null;
+		scheduleOddsBroadcast();
+	}
+}
+
+function scheduleOddsBroadcast(): void {
+	oddsDirty = true;
+	if (oddsBroadcastTimer) return;
+	oddsBroadcastTimer = setTimeout(() => {
+		oddsBroadcastTimer = null;
+		if (!oddsDirty) return;
+		oddsDirty = false;
+		broadcast({
+			type: "odds",
+			payload: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
+		});
+	}, BROADCAST_THROTTLE);
+}
+
+function connectPolymarketWS(): void {
+	pmWs = new WebSocket(PM_WS_URL);
+
+	pmWs.on("open", () => {
+		console.log(`[odds] ${new Date().toISOString()} — ws open`);
+		oddsError = null;
+		const ids = [...tokenIndex.keys()];
+		if (ids.length) {
+			pmWs!.send(JSON.stringify({
+				assets_ids: ids,
+				type: "market",
+				custom_feature_enabled: true,
+			}));
+		}
+		// Heartbeat per docs — server kills silent connections at ~10s.
+		pmPingTimer = setInterval(() => {
+			try { pmWs?.send("PING"); } catch { /* socket closing */ }
+		}, 10_000);
+	});
+
+	pmWs.on("message", (data) => {
+		const txt = data.toString();
+		if (txt === "PONG") return;
+		let arr: unknown;
+		try { arr = JSON.parse(txt); } catch { return; }
+		const events = Array.isArray(arr) ? arr : [arr];
+		for (const e of events as Array<Record<string, unknown>>) {
+			const t = e.event_type;
+			if (t === "best_bid_ask") {
+				onTopOfBook(String(e.asset_id), Number(e.best_bid), Number(e.best_ask));
+			} else if (t === "price_change") {
+				// price_change carries per-change best_bid/best_ask too — useful
+				// when best_bid_ask hasn't fired yet on a fresh subscription.
+				for (const c of (e.price_changes as Array<Record<string, unknown>>) ?? []) {
+					onTopOfBook(String(c.asset_id), Number(c.best_bid), Number(c.best_ask));
+				}
+			}
+			// ponytail: ignore `book` (heavy initial snapshot), `last_trade_price`,
+			// `new_market`, `market_resolved`. Add handling when a need shows up.
+		}
+	});
+
+	pmWs.on("close", () => {
+		console.log(`[odds] ${new Date().toISOString()} — ws closed, reconnecting in 3s`);
+		if (pmPingTimer) { clearInterval(pmPingTimer); pmPingTimer = null; }
+		pmWs = null;
+		setTimeout(connectPolymarketWS, 3_000);
+	});
+	pmWs.on("error", (err) => {
+		// ws emits "error" then "close" — log + let close handler reconnect.
+		console.error(`[odds] ws error: ${err.message}`);
+		oddsError = err.message;
+	});
+}
+
+// Seed initial state, then keep the token map fresh.
+void bootstrapTokens().then(() => connectPolymarketWS());
+setInterval(bootstrapTokens, BOOTSTRAP_INTERVAL);
 
 // ── Express ──────────────────────────────────────────────────────────
 
@@ -515,10 +657,35 @@ app.get("/api/health", (_req, res) => {
 		liveMatches: liveCache.length,
 		lastPoll: lastPollTime?.toISOString() ?? null,
 		error: pollError,
+		oddsLastPoll: oddsLastPoll?.toISOString() ?? null,
+		oddsError,
+		pmWs: pmWs?.readyState === WebSocket.OPEN ? "open" : "closed",
 	});
 });
 
-app.listen(PORT, () => {
+// ── Client WebSocket server ──────────────────────────────────────────
+// Push endpoint for the frontend. One socket per browser; we send a full
+// snapshot on connect, then deltas whenever ESPN poll or odds recompute.
+// Frontend falls back to REST poll if this socket won't stay open.
+
+const server = app.listen(PORT, () => {
 	console.log(`[wc-api] listening on :${PORT}`);
 	console.log(`[wc-api] db=${DB_PATH}`);
+});
+
+const wss = new WebSocketServer({ server, path: "/ws" });
+
+function broadcast(msg: unknown): void {
+	const data = JSON.stringify(msg);
+	for (const client of wss.clients) {
+		if (client.readyState === WebSocket.OPEN) client.send(data);
+	}
+}
+
+wss.on("connection", (ws) => {
+	ws.send(JSON.stringify({
+		type: "snapshot",
+		matches: buildResults(),
+		odds: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
+	}));
 });

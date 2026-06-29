@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
-import { oddsKey, type MatchOdds } from "../hooks/useOdds";
+import { oddsKey, type MatchOdds } from "../hooks/useLive";
 
 function teamOwner(teamIdx: number): string | null {
 	for (const p of PLAYERS) {
@@ -67,8 +67,9 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 	const awayOwner = teamOwner(m.awayIdx);
 	const isLive = m.status === "live";
 	const isFinished = m.status === "finished";
-	// Show odds for scheduled + live games; hide once finished.
-	const showOdds = (isLive || m.status === "scheduled") && odds;
+	// Reserve the odds slot for scheduled + live games even when no market
+	// exists yet — render a dash instead of leaving blank space.
+	const showOdds = isLive || m.status === "scheduled";
 	const homePct = odds?.pcts[m.homeIdx];
 	const awayPct = odds?.pcts[m.awayIdx];
 
