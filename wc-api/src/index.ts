@@ -1,19 +1,27 @@
 /**
- * Standalone API server for Fly.io
- * - Polls ESPN scoreboard every 60s
+ * Standalone API server for Fly.io (Bun + Elysia + Drizzle on bun:sqlite)
+ * - Polls ESPN scoreboard every 20s
  * - Persists finished match results to SQLite on persistent volume
  * - Exposes /api/results with merged (DB + live ESPN) data
+ * - Streams live updates + Polymarket odds over /ws
  */
-import express from "express";
-import cors from "cors";
-import Database from "better-sqlite3";
-import { WebSocketServer, WebSocket } from "ws";
+import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
+import { Database } from "bun:sqlite";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+
+// Minimal structural type for what we use off the Elysia ws context —
+// avoids coupling to Elysia's private WSEvent shape.
+interface WsClient {
+	readyState: number;
+	send: (data: string) => void;
+}
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 // ── ESPN parsing ─────────────────────────────────────────────────────
 
@@ -120,31 +128,22 @@ function parseESMNScoreboard(data: {
 	return matches;
 }
 
-// ── SQLite ───────────────────────────────────────────────────────────
+// ── Drizzle schema + SQLite ──────────────────────────────────────────
 
 const DATA_DIR = process.env.DATA_DIR ?? path.resolve(ROOT, "data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = path.resolve(DATA_DIR, "matches.db");
-const db = new Database(DB_PATH);
 
-db.pragma("journal_mode = WAL");
+// Raw bun:sqlite handle for pragmas + in-place migrations.
+const sqlite = new Database(DB_PATH);
+sqlite.exec("PRAGMA journal_mode = WAL;");
 
 // winner_idx / detail added for knockout games decided by ET or pens.
-// Added via ALTER TABLE so existing DBs on the persistent volume upgrade
-// in place without needing to recreate the table.
-try {
-	db.exec("ALTER TABLE results ADD COLUMN winner_idx INTEGER");
-} catch (_e) {
-	/* column already exists */
-}
-try {
-	db.exec("ALTER TABLE results ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
-} catch (_e) {
-	/* column already exists */
-}
-
-db.exec(`
+// ALTER TABLE so existing DBs on the persistent volume upgrade in place.
+// ponytail: migrations as raw SQL matches the prior scheme; promote to
+// drizzle-kit migrate when the schema starts churning.
+sqlite.exec(`
 	CREATE TABLE IF NOT EXISTS results (
 		match_id TEXT PRIMARY KEY,
 		espn_id TEXT,
@@ -160,32 +159,32 @@ db.exec(`
 		updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 	)
 `);
+try {
+	sqlite.exec("ALTER TABLE results ADD COLUMN winner_idx INTEGER");
+} catch { /* column exists */ }
+try {
+	sqlite.exec("ALTER TABLE results ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+} catch { /* column exists */ }
 
-const upsertStmt = db.prepare(`
-	INSERT INTO results (match_id, espn_id, home_idx, away_idx, home_score, away_score, status, clock, date, winner_idx, detail, updated_at)
-	VALUES (@matchId, @espnId, @homeIdx, @awayIdx, @homeScore, @awayScore, @status, @clock, @date, @winnerIdx, @detail, datetime('now'))
-	ON CONFLICT(match_id) DO UPDATE SET
-		espn_id = @espnId,
-		home_score = @homeScore,
-		away_score = @awayScore,
-		status = @status,
-		clock = @clock,
-		date = @date,
-		winner_idx = @winnerIdx,
-		detail = @detail,
-		updated_at = datetime('now')
-`);
+const results = sqliteTable("results", {
+	matchId: text("match_id").primaryKey(),
+	espnId: text("espn_id"),
+	homeIdx: integer("home_idx").notNull(),
+	awayIdx: integer("away_idx").notNull(),
+	homeScore: integer("home_score").notNull(),
+	awayScore: integer("away_score").notNull(),
+	status: text("status").notNull().default("finished"),
+	clock: text("clock").notNull().default(""),
+	date: text("date").notNull().default(""),
+	winnerIdx: integer("winner_idx"),
+	detail: text("detail").notNull().default(""),
+	updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
 
-const getAllStmt = db.prepare("SELECT * FROM results");
+const db = drizzle(sqlite);
 
-// ── ESPN Polling ─────────────────────────────────────────────────────
-
-const SCOREBOARD_URL =
-	"https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
-// 20s — ESPN's REST cache floor. Faster wastes requests for stale data.
-// The client WS broadcast (below) is what actually kills perceived latency.
-const POLL_INTERVAL = 20_000;
-
+// Snake-case row shape kept identical to the old better-sqlite3 output —
+// the frontend's ServerMatch type depends on it.
 interface StoredMatch {
 	match_id: string;
 	espn_id: string | null;
@@ -200,6 +199,52 @@ interface StoredMatch {
 	detail: string;
 }
 
+function rowToStored(r: typeof results.$inferSelect): StoredMatch {
+	return {
+		match_id: r.matchId,
+		espn_id: r.espnId,
+		home_idx: r.homeIdx,
+		away_idx: r.awayIdx,
+		home_score: r.homeScore,
+		away_score: r.awayScore,
+		status: r.status,
+		clock: r.clock,
+		date: r.date,
+		winner_idx: r.winnerIdx,
+		detail: r.detail,
+	};
+}
+
+function upsertMany(rows: Array<typeof results.$inferInsert>): void {
+	if (!rows.length) return;
+	// One multi-row INSERT ... ON CONFLICT statement — atomic + fast.
+	db.insert(results)
+		.values(rows)
+		.onConflictDoUpdate({
+			target: results.matchId,
+			set: {
+				espnId: sql`excluded.espn_id`,
+				homeScore: sql`excluded.home_score`,
+				awayScore: sql`excluded.away_score`,
+				status: sql`excluded.status`,
+				clock: sql`excluded.clock`,
+				date: sql`excluded.date`,
+				winnerIdx: sql`excluded.winner_idx`,
+				detail: sql`excluded.detail`,
+				updatedAt: sql`(datetime('now'))`,
+			},
+		})
+		.run();
+}
+
+// ── ESPN Polling ─────────────────────────────────────────────────────
+
+const SCOREBOARD_URL =
+	"https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard";
+// 20s — ESPN's REST cache floor. Faster wastes requests for stale data.
+// The client WS broadcast (below) is what actually kills perceived latency.
+const POLL_INTERVAL = 20_000;
+
 let liveCache: RawESPNMatch[] = [];
 let lastPollTime: Date | null = null;
 let pollError: string | null = null;
@@ -212,26 +257,22 @@ async function pollESPN(): Promise<void> {
 		const matches = parseESMNScoreboard(json);
 
 		// Persist finished matches to SQLite
-		const toSave = matches.filter((m) => m.status === "finished");
-		const transaction = db.transaction(() => {
-			for (const m of toSave) {
-				const matchId = `${m.homeIdx}v${m.awayIdx}`;
-				upsertStmt.run({
-					matchId,
-					espnId: m.espnId,
-					homeIdx: m.homeIdx,
-					awayIdx: m.awayIdx,
-					homeScore: m.homeScore,
-					awayScore: m.awayScore,
-					status: m.status,
-					clock: m.clock,
-					date: m.date,
-					winnerIdx: m.winnerIdx,
-					detail: m.detail,
-				});
-			}
-		});
-		transaction();
+		const toSave = matches
+			.filter((m) => m.status === "finished")
+			.map((m) => ({
+				matchId: `${m.homeIdx}v${m.awayIdx}`,
+				espnId: m.espnId,
+				homeIdx: m.homeIdx,
+				awayIdx: m.awayIdx,
+				homeScore: m.homeScore,
+				awayScore: m.awayScore,
+				status: m.status,
+				clock: m.clock,
+				date: m.date,
+				winnerIdx: m.winnerIdx,
+				detail: m.detail,
+			}));
+		upsertMany(toSave);
 
 		liveCache = matches;
 		lastPollTime = new Date();
@@ -239,25 +280,22 @@ async function pollESPN(): Promise<void> {
 		console.log(
 			`[poll] ${new Date().toISOString()} — ${matches.length} from ESPN, ${toSave.length} finished saved to DB`,
 		);
-		broadcast({ type: "matches", payload: buildResults() });
+		broadcastMatches();
 	} catch (e) {
 		pollError = e instanceof Error ? e.message : "Unknown error";
 		console.error(`[poll] ${new Date().toISOString()} — ${pollError}`);
 	}
 }
 
-// Initial poll, then every 60s
 pollESPN();
 setInterval(pollESPN, POLL_INTERVAL);
 
 // ── API response builder ─────────────────────────────────────────────
 
 function buildResults() {
-	const dbRows = getAllStmt.all() as StoredMatch[];
+	const dbRows = db.select().from(results).all().map(rowToStored);
 	const byKey = new Map<string, StoredMatch>();
-	for (const r of dbRows) {
-		byKey.set(r.match_id, r);
-	}
+	for (const r of dbRows) byKey.set(r.match_id, r);
 
 	// Live ESPN data overrides DB for current matches
 	for (const m of liveCache) {
@@ -524,9 +562,10 @@ function scheduleOddsBroadcast(): void {
 }
 
 function connectPolymarketWS(): void {
+	// Bun ships a native global WebSocket implementing the standard event API.
 	pmWs = new WebSocket(PM_WS_URL);
 
-	pmWs.on("open", () => {
+	pmWs.onopen = () => {
 		console.log(`[odds] ${new Date().toISOString()} — ws open`);
 		oddsError = null;
 		const ids = [...tokenIndex.keys()];
@@ -541,10 +580,10 @@ function connectPolymarketWS(): void {
 		pmPingTimer = setInterval(() => {
 			try { pmWs?.send("PING"); } catch { /* socket closing */ }
 		}, 10_000);
-	});
+	};
 
-	pmWs.on("message", (data) => {
-		const txt = data.toString();
+	pmWs.onmessage = (ev) => {
+		const txt = typeof ev.data === "string" ? ev.data : "";
 		if (txt === "PONG") return;
 		let arr: unknown;
 		try { arr = JSON.parse(txt); } catch { return; }
@@ -563,129 +602,119 @@ function connectPolymarketWS(): void {
 			// ponytail: ignore `book` (heavy initial snapshot), `last_trade_price`,
 			// `new_market`, `market_resolved`. Add handling when a need shows up.
 		}
-	});
+	};
 
-	pmWs.on("close", () => {
+	pmWs.onclose = () => {
 		console.log(`[odds] ${new Date().toISOString()} — ws closed, reconnecting in 3s`);
 		if (pmPingTimer) { clearInterval(pmPingTimer); pmPingTimer = null; }
 		pmWs = null;
 		setTimeout(connectPolymarketWS, 3_000);
-	});
-	pmWs.on("error", (err) => {
-		// ws emits "error" then "close" — log + let close handler reconnect.
-		console.error(`[odds] ws error: ${err.message}`);
-		oddsError = err.message;
-	});
+	};
+	pmWs.onerror = (err) => {
+		// Standard WebSocket error event carries a message in `event.message`
+		// under Bun; fall back to the object itself for older runtimes.
+		const msg = (err as { message?: string })?.message ?? "ws error";
+		console.error(`[odds] ws error: ${msg}`);
+		oddsError = msg;
+	};
 }
 
 // Seed initial state, then keep the token map fresh.
 void bootstrapTokens().then(() => connectPolymarketWS());
 setInterval(bootstrapTokens, BOOTSTRAP_INTERVAL);
 
-// ── Express ──────────────────────────────────────────────────────────
+// ── Elysia app ───────────────────────────────────────────────────────
 
-const app = express();
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
-app.use(cors());
-app.use(express.json());
-
-app.get("/api/results", (_req, res) => {
-	res.json(buildResults());
-});
-
-app.post("/api/poll", async (_req, res) => {
-	await pollESPN();
-	res.json(buildResults());
-});
-
-// Manual score entry — seed historical results
-app.post("/api/seed", (req, res) => {
-	const { matches } = req.body as {
-		matches: Array<{
-			home_idx: number;
-			away_idx: number;
-			home_score: number;
-			away_score: number;
-			date?: string;
-			winner_idx?: number | null;
-			detail?: string;
-		}>;
-	};
-	if (!Array.isArray(matches)) {
-		res.status(400).json({ error: "Expected { matches: [...] }" });
-		return;
-	}
-	const transaction = db.transaction(() => {
-		for (const m of matches) {
-			const matchId = `${m.home_idx}v${m.away_idx}`;
-			upsertStmt.run({
-				matchId,
-				espnId: null,
-				homeIdx: m.home_idx,
-				awayIdx: m.away_idx,
-				homeScore: m.home_score,
-				awayScore: m.away_score,
-				status: "finished",
-				clock: "FT",
-				date: m.date ?? "",
-				winnerIdx: m.winner_idx ?? null,
-				detail: m.detail ?? "",
-			});
+const app = new Elysia()
+	.use(cors())
+	.get("/api/results", () => buildResults())
+	.post("/api/poll", async () => {
+		await pollESPN();
+		return buildResults();
+	})
+	.post("/api/seed", ({ body, set }) => {
+		const input = body as {
+			matches: Array<{
+				home_idx: number;
+				away_idx: number;
+				home_score: number;
+				away_score: number;
+				date?: string;
+				winner_idx?: number | null;
+				detail?: string;
+			}>;
+		};
+		if (!Array.isArray(input?.matches)) {
+			set.status = 400;
+			return { error: "Expected { matches: [...] }" };
 		}
-	});
-	transaction();
-	console.log(`[seed] inserted ${matches.length} match(es)`);
-	res.json(buildResults());
-});
-
-// Health check
-app.get("/api/odds", (_req, res) => {
-	res.json({
+		upsertMany(input.matches.map((m) => ({
+			matchId: `${m.home_idx}v${m.away_idx}`,
+			espnId: null,
+			homeIdx: m.home_idx,
+			awayIdx: m.away_idx,
+			homeScore: m.home_score,
+			awayScore: m.away_score,
+			status: "finished",
+			clock: "FT",
+			date: m.date ?? "",
+			winnerIdx: m.winner_idx ?? null,
+			detail: m.detail ?? "",
+		})));
+		console.log(`[seed] inserted ${input.matches.length} match(es)`);
+		return buildResults();
+	})
+	.get("/api/odds", () => ({
 		odds: oddsCache,
 		lastPoll: oddsLastPoll?.toISOString() ?? null,
 		error: oddsError,
+	}))
+	.get("/api/health", () => {
+		const storedMatches = db.select().from(results).all().length;
+		return {
+			status: "ok",
+			db: DB_PATH,
+			storedMatches,
+			liveMatches: liveCache.length,
+			lastPoll: lastPollTime?.toISOString() ?? null,
+			error: pollError,
+			oddsLastPoll: oddsLastPoll?.toISOString() ?? null,
+			oddsError,
+			pmWs: pmWs?.readyState === WebSocket.OPEN ? "open" : "closed",
+		};
+	})
+	// One socket per browser: full snapshot on connect, then deltas whenever
+	// ESPN poll or odds recompute. Frontend falls back to REST poll if the
+	// socket won't stay open.
+	.ws("/ws", {
+		open(ws) {
+			clients.add(ws);
+			ws.send(JSON.stringify({
+				type: "snapshot",
+				matches: buildResults(),
+				odds: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
+			}));
+		},
+		close(ws) { clients.delete(ws); },
+		message() { /* client→server not used */ },
+	})
+	.listen(PORT, () => {
+		console.log(`[wc-api] listening on :${PORT}`);
+		console.log(`[wc-api] db=${DB_PATH}`);
 	});
-});
 
-app.get("/api/health", (_req, res) => {
-	const dbRows = getAllStmt.all() as StoredMatch[];
-	res.json({
-		status: "ok",
-		db: DB_PATH,
-		storedMatches: dbRows.length,
-		liveMatches: liveCache.length,
-		lastPoll: lastPollTime?.toISOString() ?? null,
-		error: pollError,
-		oddsLastPoll: oddsLastPoll?.toISOString() ?? null,
-		oddsError,
-		pmWs: pmWs?.readyState === WebSocket.OPEN ? "open" : "closed",
-	});
-});
-
-// ── Client WebSocket server ──────────────────────────────────────────
-// Push endpoint for the frontend. One socket per browser; we send a full
-// snapshot on connect, then deltas whenever ESPN poll or odds recompute.
-// Frontend falls back to REST poll if this socket won't stay open.
-
-const server = app.listen(PORT, () => {
-	console.log(`[wc-api] listening on :${PORT}`);
-	console.log(`[wc-api] db=${DB_PATH}`);
-});
-
-const wss = new WebSocketServer({ server, path: "/ws" });
-
+// One socket per browser tracked in a Set so we can fan out deltas
+// without depending on Elysia's topic pub/sub typing.
+const clients = new Set<WsClient>();
 function broadcast(msg: unknown): void {
 	const data = JSON.stringify(msg);
-	for (const client of wss.clients) {
-		if (client.readyState === WebSocket.OPEN) client.send(data);
+	for (const c of clients) {
+		if (c.readyState === 1) c.send(data);
 	}
 }
-
-wss.on("connection", (ws) => {
-	ws.send(JSON.stringify({
-		type: "snapshot",
-		matches: buildResults(),
-		odds: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
-	}));
-});
+// broadcastMatches → every browser connected on /ws.
+function broadcastMatches(): void {
+	broadcast({ type: "matches", payload: buildResults() });
+}
