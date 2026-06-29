@@ -82,9 +82,12 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 						<img src={flagUrl(home.code)} alt={home.code} />
 						<span className="game-team-name">{shortName(home.name)}</span>
 					</div>
-					{showOdds && homePct !== undefined && (
-						<span className="game-odds">{Math.round(homePct * 100)}%</span>
-					)}
+					{showOdds &&
+						(homePct !== undefined ? (
+							<span className="game-odds">{Math.round(homePct * 100)}%</span>
+						) : (
+							<span className="game-odds game-odds-empty" aria-label="odds pending">—</span>
+						))}
 					{homeOwner && <span className="game-owner">{homeOwner}</span>}
 				</div>
 				<div className="game-team">
@@ -92,9 +95,12 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 						<img src={flagUrl(away.code)} alt={away.code} />
 						<span className="game-team-name">{shortName(away.name)}</span>
 					</div>
-					{showOdds && awayPct !== undefined && (
-						<span className="game-odds">{Math.round(awayPct * 100)}%</span>
-					)}
+					{showOdds &&
+						(awayPct !== undefined ? (
+							<span className="game-odds">{Math.round(awayPct * 100)}%</span>
+						) : (
+							<span className="game-odds game-odds-empty" aria-label="odds pending">—</span>
+						))}
 					{awayOwner && <span className="game-owner">{awayOwner}</span>}
 				</div>
 			</div>
