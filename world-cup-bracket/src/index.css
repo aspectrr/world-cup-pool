@@ -1183,6 +1183,12 @@ img {
 	border-radius: 8px;
 	white-space: nowrap;
 }
+/* Placeholder when Polymarket hasn't listed the market yet — signals
+	 "pending" rather than a silent gap. */
+.game-odds-empty {
+	background: transparent;
+	opacity: 0.4;
+}
 .game-score-col {
 	display: flex;
 	flex-direction: column;
