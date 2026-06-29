@@ -6,7 +6,18 @@ import {
 	calcGroupStandings,
 	getAliveTeams,
 	getTeamStage,
+	type Stage,
 } from "../utils/standings";
+
+const STAGE_ORDER: Stage[] = [
+	"group",
+	"r32",
+	"r16",
+	"qf",
+	"sf",
+	"final",
+	"winner",
+];
 
 /** Always returns all teams per group with zeroes, filling in played stats */
 function alwaysStandings(gMatches: GroupMatch[]): Map<string, GroupStanding[]> {
@@ -80,6 +91,33 @@ export function MyTeams({
 
 	const aliveCount = player.teamIndices.filter((t) => alive.has(t)).length;
 
+	// Sort teams: alive first, then by tournament progress (furthest stage,
+	// then current group position, then FIFA rank). Lets you see your live,
+	// best-performing teams at a glance.
+	const sortedTeamIndices = useMemo(() => {
+		return [...player.teamIndices].sort((a, b) => {
+			const aAlive = alive.has(a);
+			const bAlive = alive.has(b);
+			if (aAlive !== bAlive) return aAlive ? -1 : 1;
+
+			const aStage = STAGE_ORDER.indexOf(getTeamStage(a, kMatches));
+			const bStage = STAGE_ORDER.indexOf(getTeamStage(b, kMatches));
+			if (aStage !== bStage) return bStage - aStage; // further stage first
+
+			const aPos =
+				(standings.get(TEAMS[a].group) ?? []).findIndex(
+					(s) => s.teamIdx === a,
+				) + 1;
+			const bPos =
+				(standings.get(TEAMS[b].group) ?? []).findIndex(
+					(s) => s.teamIdx === b,
+				) + 1;
+			if (aPos && bPos && aPos !== bPos) return aPos - bPos;
+
+			return TEAMS[a].fifaRank - TEAMS[b].fifaRank;
+		});
+	}, [player.teamIndices, alive, kMatches, standings]);
+
 	return (
 		<div>
 			<div className="section-title">My Teams</div>
@@ -112,7 +150,7 @@ export function MyTeams({
 			</div>
 
 			<div className="my-teams-grid">
-				{player.teamIndices.map((tIdx) => {
+				{sortedTeamIndices.map((tIdx) => {
 					const team = TEAMS[tIdx];
 					const isAlive = alive.has(tIdx);
 					const stage = getTeamStage(tIdx, kMatches);
