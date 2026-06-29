@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "dev": "bun --bun vite",
+    "build": "bun --bun tsc -b && bun --bun vite build",
+    "lint": "bun --bun eslint .",
     "test": "bun test",
-    "preview": "vite preview"
+    "preview": "bun --bun vite preview"
   },
   "dependencies": {
     "react": "^19.2.6",

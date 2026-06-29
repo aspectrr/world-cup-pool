@@ -1,9 +1,9 @@
-FROM node:22-slim
+FROM oven/bun:1-debian
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
 COPY tsconfig.json ./
 COPY src ./src
 
 EXPOSE 3000
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["bun", "src/index.ts"]
