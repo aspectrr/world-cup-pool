@@ -1173,6 +1173,16 @@ img {
 	letter-spacing: 0.5px;
 	white-space: nowrap;
 }
+.game-odds {
+	font-size: 0.62rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+	background: color-mix(in srgb, var(--accent) 12%, transparent);
+	padding: 1px 5px;
+	border-radius: 8px;
+	white-space: nowrap;
+}
 .game-score-col {
 	display: flex;
 	flex-direction: column;

@@ -280,6 +280,166 @@ function buildResults() {
 	};
 }
 
+// ── Polymarket odds ─────────────────────────────────────────────────
+// Public, keyless Gamma API. Each WC match is one event with three binary
+// markets: "Will {Home} win?", "Will it end in a draw?", "Will {Away} win?".
+// The Yes price of each ≈ implied probability (they sum to ~1.0 minus vig).
+
+// 48 WC team names — kept in sync with world-cup-bracket/src/data/teams.ts.
+// ponytail: duplicated from the frontend rather than shared, to keep the
+// API server dependency-free. Update both if the field changes.
+const WC_TEAMS: string[] = [
+	"Mexico", "South Africa", "South Korea", "Czech Republic",
+	"Canada", "Bosnia and Herzegovina", "Qatar", "Switzerland",
+	"Brazil", "Morocco", "Haiti", "Scotland",
+	"United States", "Paraguay", "Australia", "Turkey",
+	"Germany", "Curaçao", "Ivory Coast", "Ecuador",
+	"Netherlands", "Japan", "Sweden", "Tunisia",
+	"Belgium", "Egypt", "Iran", "New Zealand",
+	"Spain", "Cape Verde", "Saudi Arabia", "Uruguay",
+	"France", "Senegal", "Iraq", "Norway",
+	"Argentina", "Algeria", "Austria", "Jordan",
+	"Portugal", "DR Congo", "Uzbekistan", "Colombia",
+	"England", "Croatia", "Ghana", "Panama",
+];
+
+// Our team names → idx. Aliases cover Polymarket's title variants.
+const PM_ALIAS: Record<string, string> = {
+	"cote d'ivoire": "ivory coast",
+	"cabo verde": "cape verde",
+	czechia: "czech republic",
+	"bosnia": "bosnia and herzegovina",
+	"south korea": "south korea",
+};
+
+function normalizeName(s: string): string {
+	return s
+		.toLowerCase()
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+const PM_NAME_TO_IDX = new Map<string, number>();
+for (let i = 0; i < WC_TEAMS.length; i++) {
+	PM_NAME_TO_IDX.set(normalizeName(WC_TEAMS[i]), i);
+}
+for (const [alias, canonical] of Object.entries(PM_ALIAS)) {
+	const idx = PM_NAME_TO_IDX.get(canonical);
+	if (idx !== undefined) PM_NAME_TO_IDX.set(normalizeName(alias), idx);
+}
+
+function pmTeamIdx(name: string): number | null {
+	return PM_NAME_TO_IDX.get(normalizeName(name)) ?? null;
+}
+
+interface PmMarket {
+	question: string;
+	outcomes: string; // JSON-encoded, e.g. '["Yes","No"]'
+	outcomePrices: string; // JSON-encoded
+}
+
+interface PmEvent {
+	slug: string;
+	title: string;
+	markets?: PmMarket[];
+}
+
+// pair key canonicalized by team-idx order so the frontend can look up
+// regardless of which side is home in our schedule.
+function pairKey(a: number, b: number): string {
+	return a < b ? `${a}v${b}` : `${b}v${a}`;
+}
+
+interface MatchOdds {
+	pcts: Record<number, number>; // teamIdx → implied win prob (0..1)
+	draw: number; // implied draw prob (0..1)
+}
+
+let oddsCache: Record<string, MatchOdds> = {};
+let oddsLastPoll: Date | null = null;
+let oddsError: string | null = null;
+
+const GAMMA_EVENTS_URL = "https://gamma-api.polymarket.com/events";
+const ODDS_POLL_INTERVAL = 60_000;
+
+// Skip derivative event variants — we only want the base moneyline event.
+const PM_VARIANT = /(more-markets|exact-score|total-corners|player-props|both-teams-to-score)/;
+
+async function pollPolymarket(): Promise<void> {
+	try {
+		const url =
+			`${GAMMA_EVENTS_URL}?limit=300&closed=false` +
+			`&order=volume24hr&ascending=false&tag=soccer`;
+		const res = await fetch(url);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const events = (await res.json()) as PmEvent[];
+
+		const out: Record<string, MatchOdds> = {};
+		for (const ev of events) {
+			if (!ev.slug.startsWith("fifwc-")) continue;
+			if (PM_VARIANT.test(ev.slug)) continue;
+
+			// Title shape: "Home vs. Away" (or "Home vs Away").
+			const parts = ev.title.split(/\s+vs\.?\s+/);
+			if (parts.length !== 2) continue;
+			const homeIdx = pmTeamIdx(parts[0]);
+			const awayIdx = pmTeamIdx(parts[1]);
+			if (homeIdx === null || awayIdx === null) continue;
+
+			const pcts: Record<number, number> = {};
+			let draw: number | null = null;
+
+			const parseJson = <T,>(s: string | undefined): T[] => {
+				if (!s) return [];
+				try {
+					const v = JSON.parse(s);
+					return Array.isArray(v) ? (v as T[]) : [];
+				} catch {
+					return []
+				}
+			};
+
+			for (const m of ev.markets ?? []) {
+				const outcomes = parseJson<string>(m.outcomes);
+				const prices = parseJson<string>(m.outcomePrices);
+				const yesIdx = outcomes.indexOf("Yes");
+				const yes = yesIdx >= 0 ? Number(prices[yesIdx]) : NaN;
+				if (!Number.isFinite(yes)) continue;
+
+				const winMatch = m.question.match(/^Will (.+?) win on /);
+				if (winMatch) {
+					const idx = pmTeamIdx(winMatch[1]);
+					if (idx !== null) pcts[idx] = yes;
+					continue;
+				}
+				if (/draw/i.test(m.question)) draw = yes;
+			}
+
+			// Only emit if we resolved both win prices.
+			if (pcts[homeIdx] === undefined || pcts[awayIdx] === undefined) continue;
+			out[pairKey(homeIdx, awayIdx)] = {
+				pcts,
+				draw: draw ?? 0,
+			};
+		}
+
+		oddsCache = out;
+		oddsLastPoll = new Date();
+		oddsError = null;
+		console.log(
+			`[odds] ${new Date().toISOString()} — priced ${Object.keys(out).length} matches`,
+		);
+	} catch (e) {
+		oddsError = e instanceof Error ? e.message : "Unknown error";
+		console.error(`[odds] ${new Date().toISOString()} — ${oddsError}`);
+	}
+}
+
+pollPolymarket();
+setInterval(pollPolymarket, ODDS_POLL_INTERVAL);
+
 // ── Express ──────────────────────────────────────────────────────────
 
 const app = express();
@@ -338,6 +498,14 @@ app.post("/api/seed", (req, res) => {
 });
 
 // Health check
+app.get("/api/odds", (_req, res) => {
+	res.json({
+		odds: oddsCache,
+		lastPoll: oddsLastPoll?.toISOString() ?? null,
+		error: oddsError,
+	});
+});
+
 app.get("/api/health", (_req, res) => {
 	const dbRows = getAllStmt.all() as StoredMatch[];
 	res.json({

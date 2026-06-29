@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
+import { oddsKey, type MatchOdds } from "../hooks/useOdds";
 
 function teamOwner(teamIdx: number): string | null {
 	for (const p of PLAYERS) {
@@ -59,13 +60,17 @@ function formatTime(iso: string): string {
 	});
 }
 
-function GameRow({ m }: { m: GameMatch }) {
+function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 	const home = TEAMS[m.homeIdx];
 	const away = TEAMS[m.awayIdx];
 	const homeOwner = teamOwner(m.homeIdx);
 	const awayOwner = teamOwner(m.awayIdx);
 	const isLive = m.status === "live";
 	const isFinished = m.status === "finished";
+	// Show odds for scheduled + live games; hide once finished.
+	const showOdds = (isLive || m.status === "scheduled") && odds;
+	const homePct = odds?.pcts[m.homeIdx];
+	const awayPct = odds?.pcts[m.awayIdx];
 
 	return (
 		<div
@@ -77,6 +82,9 @@ function GameRow({ m }: { m: GameMatch }) {
 						<img src={flagUrl(home.code)} alt={home.code} />
 						<span className="game-team-name">{shortName(home.name)}</span>
 					</div>
+					{showOdds && homePct !== undefined && (
+						<span className="game-odds">{Math.round(homePct * 100)}%</span>
+					)}
 					{homeOwner && <span className="game-owner">{homeOwner}</span>}
 				</div>
 				<div className="game-team">
@@ -84,6 +92,9 @@ function GameRow({ m }: { m: GameMatch }) {
 						<img src={flagUrl(away.code)} alt={away.code} />
 						<span className="game-team-name">{shortName(away.name)}</span>
 					</div>
+					{showOdds && awayPct !== undefined && (
+						<span className="game-odds">{Math.round(awayPct * 100)}%</span>
+					)}
 					{awayOwner && <span className="game-owner">{awayOwner}</span>}
 				</div>
 			</div>
@@ -127,9 +138,11 @@ function GameRow({ m }: { m: GameMatch }) {
 export function GamesView({
 	gMatches,
 	kMatches,
+	odds = {},
 }: {
 	gMatches: GroupMatch[];
 	kMatches: KnockoutMatch[];
+	odds?: Record<string, MatchOdds>;
 }) {
 	// Build sorted list of match days with their games.
 	const days = useMemo<DayGroup[]>(() => {
@@ -298,7 +311,11 @@ export function GamesView({
 							: current.label}
 					</div>
 					{current.games.map((g) => (
-						<GameRow key={g.id} m={g} />
+						<GameRow
+							key={g.id}
+							m={g}
+							odds={odds[oddsKey(g.homeIdx, g.awayIdx)]}
+						/>
 					))}
 				</div>
 			) : (
