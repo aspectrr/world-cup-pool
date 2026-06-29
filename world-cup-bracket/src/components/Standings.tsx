@@ -217,27 +217,29 @@ export function Standings({
       };
     }, [gMatches, kMatches, alive]);
 
-  // Live preview: until the FINAL is played, project champion/runner-up
-  // from the current standings leader (#1 = on pace for champion, #2 =
-  // runner-up). Once the final is decided, the real winner/loser overrides.
-  const projectedChampion = !championPlayer && rankings[0]?.name;
-  const projectedRunnerUp = !runnerUpPlayer && rankings[1]?.name;
-  const championDisplay = championPlayer ?? projectedChampion ?? null;
-  const runnerUpDisplay = runnerUpPlayer ?? projectedRunnerUp ?? null;
+  // Live preview until finalized: project champion/runner-up from current
+  // standings leader (#1/#2), project first-out from current last place.
+  // Once the final is played / someone is fully eliminated, the real value
+  // overrides. The top legend only shows a name once finalized.
+  const projectedChampion = !championPlayer ? rankings[0]?.name : null;
+  const projectedRunnerUp = !runnerUpPlayer ? rankings[1]?.name : null;
+  const projectedFirstOut = !firstOutPlayer
+    ? rankings[rankings.length - 1]?.name
+    : null;
 
   return (
     <div>
       <div className="prize-legend">
         <div className="prize-item">
           <div className="amount">${PRIZES.winner}</div>
-          <div className={`label${championDisplay ? " prize-won" : ""}`}>
-            {championDisplay ?? "Winner"}
+          <div className={`label${championPlayer ? " prize-won" : ""}`}>
+            {championPlayer ?? "Winner"}
           </div>
         </div>
         <div className="prize-item">
           <div className="amount">${PRIZES.runnerUp}</div>
-          <div className={`label${runnerUpDisplay ? " prize-won" : ""}`}>
-            {runnerUpDisplay ?? "Runner-up"}
+          <div className={`label${runnerUpPlayer ? " prize-won" : ""}`}>
+            {runnerUpPlayer ?? "Runner-up"}
           </div>
         </div>
         <div className="prize-item">
@@ -254,8 +256,9 @@ export function Standings({
             i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "";
 
           // Determine prize label + container class for this player.
-          // Champion/runner-up container treatment is a live preview from
-          // current rank until the FINAL is actually played.
+          // Real winner/loser/first-out: solid border + text badge.
+          // Projected (current pace): dashed border only, no text label —
+          // the card tint is the indicator, badge appears when finalized.
           let prizeLabel: string | null = null;
           let cardPrizeClass = "";
           if (p.name === championPlayer) {
@@ -265,22 +268,22 @@ export function Standings({
             prizeLabel = `🥈 $${PRIZES.runnerUp} — Runner-up`;
             cardPrizeClass = " prize-runnerup";
           } else if (p.name === projectedChampion) {
-            prizeLabel = `📊 $${PRIZES.winner} — Projected Champion`;
             cardPrizeClass = " prize-champion projected";
           } else if (p.name === projectedRunnerUp) {
-            prizeLabel = `📊 $${PRIZES.runnerUp} — Projected Runner-up`;
             cardPrizeClass = " prize-runnerup projected";
           }
 
-          // Every eliminated player gets the grayscale ELIMINATED treatment.
-          // Only the first-out additionally gets the gold $5 badge.
-          if (p.eliminated) {
+          // First-out: real (someone fully eliminated) gets gold badge +
+          // grayscale; projected (just last place right now) gets red tint.
+          // Every other fully-eliminated player also gets grayscale + stamp.
+          if (p.name === firstOutPlayer) {
+            prizeLabel = `💸 $${PRIZES.firstOut} — First Out`;
             cardPrizeClass = " prize-firstout";
-            if (p.name === firstOutPlayer) {
-              prizeLabel = `💸 $${PRIZES.firstOut} — First Out`;
-            } else {
-              prizeLabel = `☠️ Eliminated`;
-            }
+          } else if (p.name === projectedFirstOut) {
+            cardPrizeClass = " prize-firstout projected";
+          } else if (p.eliminated) {
+            cardPrizeClass = " prize-firstout";
+            prizeLabel = `☠️ Eliminated`;
           }
 
           return (
