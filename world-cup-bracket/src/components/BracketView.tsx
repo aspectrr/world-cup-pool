@@ -97,7 +97,7 @@ function MatchCard({
 				{m.status === "live" && m.clock && (
 					<span className="bracket-live-clock">
 						<span className="live-pip" />
-						{m.clock}
+						{m.detail === "HT" ? "HT" : m.clock}
 					</span>
 				)}
 				{home ? (
