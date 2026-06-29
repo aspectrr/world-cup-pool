@@ -2,28 +2,13 @@ import { useMemo } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS, PRIZES } from "../data/players";
-import { calcGroupStandings, getAliveTeams, getTeamStage, knockoutWinner } from "../utils/standings";
+import {
+  calcGroupStandings,
+  getAliveTeams,
+  getTeamStage,
+  knockoutWinner,
+} from "../utils/standings";
 
-type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
-
-const STAGE_ORDER: Stage[] = [
-  "group",
-  "r32",
-  "r16",
-  "qf",
-  "sf",
-  "final",
-  "winner",
-];
-
-function stagePoints(stage: Stage): number {
-  return STAGE_ORDER.indexOf(stage);
-}
-
-
-
-// When was a player's LAST team eliminated?
-// Returns { round, date } — used for first-out tiebreaking by time
 // When was a player's LAST team eliminated?
 // Tracks both group stage (3rd/4th = eliminated if not best 3rd) and knockout
 // Returns { round, date } — round -1 = group stage, 0+ = knockout round
@@ -45,7 +30,7 @@ function getLastElimination(
     }
   };
 
-  // Check knockout losses
+  // Check knockout losses (uses knockoutWinner so pens/ET losses count)
   for (const tIdx of teamIndices) {
     for (const m of kMatches) {
       if (m.homeIdx !== tIdx && m.awayIdx !== tIdx) continue;
@@ -88,7 +73,7 @@ interface PlayerScore {
   totalStagePts: number;
   groupPoints: number; // sum of group-stage points across owned teams
   groupGD: number; // sum of goal differential across owned teams
-  bestStage: Stage;
+  bestStage: string;
   eliminated: boolean;
   lastElimRound: number; // when last team was KO'd (-1 = still alive or no KO yet)
   lastElimDate: string; // ISO date of last elimination (for timing tiebreaker)
@@ -115,15 +100,16 @@ export function Standings({
 
       const scores: PlayerScore[] = PLAYERS.map((p) => {
         let totalStagePts = 0;
-        let bestStage: Stage = "group";
+        let bestStage: string = "group";
         let aliveCount = 0;
         let groupPoints = 0;
         let groupGD = 0;
 
         for (const tIdx of p.teamIndices) {
           const stage = getTeamStage(tIdx, kMatches);
-          totalStagePts += stagePoints(stage);
-          if (STAGE_ORDER.indexOf(stage) > STAGE_ORDER.indexOf(bestStage)) {
+          totalStagePts += ["group", "r32", "r16", "qf", "sf", "final", "winner"].indexOf(stage);
+          if (["group", "r32", "r16", "qf", "sf", "final", "winner"].indexOf(stage) >
+            ["group", "r32", "r16", "qf", "sf", "final", "winner"].indexOf(bestStage)) {
             bestStage = stage;
           }
           if (alive.has(tIdx)) aliveCount++;
@@ -151,9 +137,9 @@ export function Standings({
         };
       });
 
+      const STAGE_ORDER = ["group", "r32", "r16", "qf", "sf", "final", "winner"];
+
       // Sort: alive → KO stage pts → group points → group GD → best stage → last elim later
-      // Group-stage phase: everyone has alive=6, stagePts=0, so groupPoints + groupGD
-      // become the effective ranking. Knockout phase: alive/stagePts take over.
       scores.sort((a, b) => {
         if (b.alive !== a.alive) return b.alive - a.alive;
         if (b.totalStagePts !== a.totalStagePts)
@@ -161,12 +147,8 @@ export function Standings({
         if (b.groupPoints !== a.groupPoints)
           return b.groupPoints - a.groupPoints;
         if (b.groupGD !== a.groupGD) return b.groupGD - a.groupGD;
-        if (
-          STAGE_ORDER.indexOf(b.bestStage) !== STAGE_ORDER.indexOf(a.bestStage)
-        )
-          return (
-            STAGE_ORDER.indexOf(b.bestStage) - STAGE_ORDER.indexOf(a.bestStage)
-          );
+        if (STAGE_ORDER.indexOf(b.bestStage) !== STAGE_ORDER.indexOf(a.bestStage))
+          return STAGE_ORDER.indexOf(b.bestStage) - STAGE_ORDER.indexOf(a.bestStage);
         return b.lastElimRound - a.lastElimRound;
       });
 
@@ -203,7 +185,6 @@ export function Standings({
         fullyEliminated.sort((a, b) => {
           if (a.lastElimRound !== b.lastElimRound)
             return a.lastElimRound - b.lastElimRound;
-          // Same round → compare ISO dates (earlier = eliminated first)
           return (a.lastElimDate || "").localeCompare(b.lastElimDate || "");
         });
         firstOutPlayer = fullyEliminated[0].name;
@@ -219,8 +200,7 @@ export function Standings({
 
   // Live preview until finalized: project champion/runner-up from current
   // standings leader (#1/#2), project first-out from current last place.
-  // Once the final is played / someone is fully eliminated, the real value
-  // overrides. The top legend only shows a name once finalized.
+  // The top legend only shows a name once finalized.
   const projectedChampion = !championPlayer ? rankings[0]?.name : null;
   const projectedRunnerUp = !runnerUpPlayer ? rankings[1]?.name : null;
   const projectedFirstOut = !firstOutPlayer
@@ -257,8 +237,7 @@ export function Standings({
 
           // Determine prize label + container class for this player.
           // Real winner/loser/first-out: solid border + text badge.
-          // Projected (current pace): dashed border only, no text label —
-          // the card tint is the indicator, badge appears when finalized.
+          // Projected (current pace): dashed border only, no text label.
           let prizeLabel: string | null = null;
           let cardPrizeClass = "";
           if (p.name === championPlayer) {

@@ -251,7 +251,19 @@ export default function App() {
 					if (live) Object.assign(base, live);
 				}
 				// Register winner for downstream matches.
-				winnerOf.set(m.id, resolveWinner(base));
+				winnerOf.set(
+					m.id,
+					base.played &&
+						base.homeScore !== null &&
+						base.awayScore !== null &&
+						base.status !== "live"
+						? base.homeScore > base.awayScore
+							? homeIdx
+							: base.awayScore > base.homeScore
+								? awayIdx
+								: null
+						: null,
+				);
 				return base;
 			}
 
