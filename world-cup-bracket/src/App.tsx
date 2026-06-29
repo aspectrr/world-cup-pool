@@ -213,7 +213,26 @@ export default function App() {
 				status: sm.status,
 				clock: sm.clock,
 				date: sm.date,
+				winnerIdx: sm.winner_idx,
+				detail: sm.detail,
 			};
+		};
+
+		// Resolve the winner team idx of a built match. Prefers ESPN's explicit
+		// winner flag (set for ET/pen wins where regulation score is tied),
+		// falls back to score difference. Null for unplayed/live/drawn.
+		const resolveWinner = (b: KnockoutMatch): number | null => {
+			if (
+				!b.played ||
+				b.homeScore === null ||
+				b.awayScore === null ||
+				b.status === "live"
+			)
+				return null;
+			if (b.winnerIdx !== null && b.winnerIdx !== undefined) return b.winnerIdx;
+			if (b.homeScore > b.awayScore) return b.homeIdx;
+			if (b.awayScore > b.homeScore) return b.awayIdx;
+			return null;
 		};
 
 		return initKnockoutMatches.map((m): KnockoutMatch => {
@@ -262,19 +281,7 @@ export default function App() {
 				const live = mergeLive(base.homeIdx, base.awayIdx);
 				if (live) Object.assign(base, live);
 			}
-			winnerOf.set(
-				m.id,
-				base.played &&
-					base.homeScore !== null &&
-					base.awayScore !== null &&
-					base.status !== "live"
-					? base.homeScore > base.awayScore
-						? base.homeIdx!
-						: base.awayScore > base.homeScore
-							? base.awayIdx!
-							: null
-					: null,
-			);
+			winnerOf.set(m.id, resolveWinner(base));
 			return base;
 		});
 	}, [gMatches, clinchedWinners, live.matches]);

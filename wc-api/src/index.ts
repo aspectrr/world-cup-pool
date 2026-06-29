@@ -43,17 +43,28 @@ interface RawESPNMatch {
 	status: "scheduled" | "live" | "finished";
 	clock: string;
 	date: string;
+	// Winner team idx when ESPN marks a competitor as the winner. Only set
+	// for knockout games decided by extra time or penalties (where the
+	// regulation score is tied). Null otherwise.
+	winnerIdx: number | null;
+	// Human-readable status detail from ESPN, e.g. "FT", "FT aet", "Pen".
+	// Lets the UI show an AET/Pen tag next to the score.
+	detail: string;
 }
 
 function parseESMNScoreboard(data: {
 	events?: Array<{
 		id: string;
 		date: string;
-		status: { type: { state: string }; displayClock: string };
+		status: {
+			type: { state: string; shortDetail?: string; detail?: string };
+			displayClock: string;
+		};
 		competitions: Array<{
 			competitors: Array<{
 				homeAway: string;
 				score: string;
+				winner?: boolean;
 				team: { abbreviation: string };
 			}>;
 		}>;
@@ -77,15 +88,32 @@ function parseESMNScoreboard(data: {
 		const status: RawESPNMatch["status"] =
 			state === "in" ? "live" : state === "post" ? "finished" : "scheduled";
 
+		const homeScore = parseInt(homeComp.score, 10) || 0;
+		const awayScore = parseInt(awayComp.score, 10) || 0;
+		// ESPN sets `winner: true` on the advancing competitor for knockout
+		// games decided by ET or pens. Regulation score may stay tied.
+		const winnerIdx =
+			homeComp.winner === true
+				? homeIdx
+				: awayComp.winner === true
+					? awayIdx
+					: null;
+		const detail =
+			event.status?.type?.shortDetail ??
+			event.status?.type?.detail ??
+			"";
+
 		matches.push({
 			espnId: event.id,
 			homeIdx,
 			awayIdx,
-			homeScore: parseInt(homeComp.score, 10) || 0,
-			awayScore: parseInt(awayComp.score, 10) || 0,
+			homeScore,
+			awayScore,
 			status,
 			clock: event.status?.displayClock ?? "",
 			date: event.date,
+			winnerIdx,
+			detail,
 		});
 	}
 	return matches;
@@ -101,6 +129,20 @@ const db = new Database(DB_PATH);
 
 db.pragma("journal_mode = WAL");
 
+// winner_idx / detail added for knockout games decided by ET or pens.
+// Added via ALTER TABLE so existing DBs on the persistent volume upgrade
+// in place without needing to recreate the table.
+try {
+	db.exec("ALTER TABLE results ADD COLUMN winner_idx INTEGER");
+} catch (_e) {
+	/* column already exists */
+}
+try {
+	db.exec("ALTER TABLE results ADD COLUMN detail TEXT NOT NULL DEFAULT ''");
+} catch (_e) {
+	/* column already exists */
+}
+
 db.exec(`
 	CREATE TABLE IF NOT EXISTS results (
 		match_id TEXT PRIMARY KEY,
@@ -112,13 +154,15 @@ db.exec(`
 		status TEXT NOT NULL DEFAULT 'finished',
 		clock TEXT NOT NULL DEFAULT '',
 		date TEXT NOT NULL DEFAULT '',
+		winner_idx INTEGER,
+		detail TEXT NOT NULL DEFAULT '',
 		updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 	)
 `);
 
 const upsertStmt = db.prepare(`
-	INSERT INTO results (match_id, espn_id, home_idx, away_idx, home_score, away_score, status, clock, date, updated_at)
-	VALUES (@matchId, @espnId, @homeIdx, @awayIdx, @homeScore, @awayScore, @status, @clock, @date, datetime('now'))
+	INSERT INTO results (match_id, espn_id, home_idx, away_idx, home_score, away_score, status, clock, date, winner_idx, detail, updated_at)
+	VALUES (@matchId, @espnId, @homeIdx, @awayIdx, @homeScore, @awayScore, @status, @clock, @date, @winnerIdx, @detail, datetime('now'))
 	ON CONFLICT(match_id) DO UPDATE SET
 		espn_id = @espnId,
 		home_score = @homeScore,
@@ -126,6 +170,8 @@ const upsertStmt = db.prepare(`
 		status = @status,
 		clock = @clock,
 		date = @date,
+		winner_idx = @winnerIdx,
+		detail = @detail,
 		updated_at = datetime('now')
 `);
 
@@ -147,6 +193,8 @@ interface StoredMatch {
 	status: string;
 	clock: string;
 	date: string;
+	winner_idx: number | null;
+	detail: string;
 }
 
 let liveCache: RawESPNMatch[] = [];
@@ -175,6 +223,8 @@ async function pollESPN(): Promise<void> {
 					status: m.status,
 					clock: m.clock,
 					date: m.date,
+					winnerIdx: m.winnerIdx,
+					detail: m.detail,
 				});
 			}
 		});
@@ -218,6 +268,8 @@ function buildResults() {
 			status: m.status,
 			clock: m.clock,
 			date: m.date,
+			winner_idx: m.winnerIdx,
+			detail: m.detail,
 		});
 	}
 
@@ -247,7 +299,17 @@ app.post("/api/poll", async (_req, res) => {
 
 // Manual score entry — seed historical results
 app.post("/api/seed", (req, res) => {
-	const { matches } = req.body as Array<{ home_idx: number; away_idx: number; home_score: number; away_score: number; date?: string }>;
+	const { matches } = req.body as {
+		matches: Array<{
+			home_idx: number;
+			away_idx: number;
+			home_score: number;
+			away_score: number;
+			date?: string;
+			winner_idx?: number | null;
+			detail?: string;
+		}>;
+	};
 	if (!Array.isArray(matches)) {
 		res.status(400).json({ error: "Expected { matches: [...] }" });
 		return;
@@ -265,6 +327,8 @@ app.post("/api/seed", (req, res) => {
 				status: "finished",
 				clock: "FT",
 				date: m.date ?? "",
+				winnerIdx: m.winner_idx ?? null,
+				detail: m.detail ?? "",
 			});
 		}
 	});
