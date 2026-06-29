@@ -367,6 +367,67 @@ const ODDS_POLL_INTERVAL = 60_000;
 // Skip derivative event variants — we only want the base moneyline event.
 const PM_VARIANT = /(more-markets|exact-score|total-corners|player-props|both-teams-to-score)/;
 
+// Stream the Gamma response as text and extract only the fifwc event
+// objects via brace-matching — avoids building the full ~12MB / 100-event
+// object graph, which OOM-kills the 256MB VM. We pull ~25 small events
+// instead of 100 fat ones, so peak heap stays flat.
+function extractWcEvents(raw: string): PmEvent[] {
+	const SLUG = '"slug":"fifwc-';
+	const out: PmEvent[] = [];
+	let searchFrom = 0;
+	while (true) {
+		const si = raw.indexOf(SLUG, searchFrom);
+		if (si < 0) break;
+		// Walk left to the opening brace of this event object.
+		let depth = 0;
+		let start = -1;
+		for (let i = si - 1; i >= 0; i--) {
+			const c = raw[i];
+			if (c === "}") depth++;
+			else if (c === "{") {
+				if (depth === 0) {
+					start = i;
+					break;
+				}
+				depth--;
+			}
+		}
+		if (start < 0) break;
+		// Walk right from start, matching braces, respecting strings.
+		let depth2 = 0;
+		let inStr = false;
+		let esc = false;
+		let end = -1;
+		for (let i = start; i < raw.length; i++) {
+			const c = raw[i];
+			if (inStr) {
+				if (esc) esc = false;
+				else if (c === "\\") esc = true;
+				else if (c === '"') inStr = false;
+			} else {
+				if (c === '"') inStr = true;
+				else if (c === "{") depth2++;
+				else if (c === "}") {
+					depth2--;
+					if (depth2 === 0) {
+						end = i;
+						break;
+					}
+				}
+			}
+		}
+		if (end < 0) break;
+		const slice = raw.slice(start, end + 1);
+		try {
+			out.push(JSON.parse(slice) as PmEvent);
+		} catch {
+			/* malformed slice — skip */
+		}
+		searchFrom = end + 1;
+	}
+	return out;
+}
+
 async function pollPolymarket(): Promise<void> {
 	try {
 		const url =
@@ -374,9 +435,20 @@ async function pollPolymarket(): Promise<void> {
 			`&order=volume24hr&ascending=false&tag=soccer`;
 		const res = await fetch(url);
 		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const events = (await res.json()) as PmEvent[];
+		const raw = await res.text();
+		const events = extractWcEvents(raw);
 
 		const out: Record<string, MatchOdds> = {};
+		const parseJson = <T,>(s: string | undefined): T[] => {
+			if (!s) return [];
+			try {
+				const v = JSON.parse(s);
+				return Array.isArray(v) ? (v as T[]) : [];
+			} catch {
+				return [];
+			}
+		};
+
 		for (const ev of events) {
 			if (!ev.slug.startsWith("fifwc-")) continue;
 			if (PM_VARIANT.test(ev.slug)) continue;
@@ -390,16 +462,6 @@ async function pollPolymarket(): Promise<void> {
 
 			const pcts: Record<number, number> = {};
 			let draw: number | null = null;
-
-			const parseJson = <T,>(s: string | undefined): T[] => {
-				if (!s) return [];
-				try {
-					const v = JSON.parse(s);
-					return Array.isArray(v) ? (v as T[]) : [];
-				} catch {
-					return []
-				}
-			};
 
 			for (const m of ev.markets ?? []) {
 				const outcomes = parseJson<string>(m.outcomes);
