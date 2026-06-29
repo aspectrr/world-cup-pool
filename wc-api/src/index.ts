@@ -324,7 +324,7 @@ function buildResults() {
 
 // ── Polymarket odds (via CLOB market WebSocket) ────────────────────
 // We subscribe to wss://ws-subscriptions-clob.polymarket.com/ws/market for
-// best_bid_ask events on each WC market's Yes token. Mid-price = implied
+// best_bid_ask events on each WC match's Team-to-Advance tokens. Mid-price = implied
 // probability. Token IDs are bootstrapped from Gamma REST every few minutes
 // (and on startup) so newly-created fixtures appear without a redeploy.
 
@@ -379,9 +379,10 @@ function pmTeamIdx(name: string): number | null {
 
 interface PmMarket {
 	question: string;
-	outcomes: string; // JSON-encoded, e.g. '["Yes","No"]'
+	sportsMarketType?: string;
+	outcomes: string; // JSON-encoded, e.g. '["Germany","Paraguay"]'
 	outcomePrices: string; // JSON-encoded
-	clobTokenIds: string; // JSON-encoded: [yesTokenId, noTokenId]
+	clobTokenIds: string; // JSON-encoded: [homeTokenId, awayTokenId]
 }
 
 interface PmEvent {
@@ -414,8 +415,9 @@ const BOOTSTRAP_INTERVAL = 5 * 60_000;
 // and batching drops needless client traffic.
 const BROADCAST_THROTTLE = 1_000;
 
-// Skip derivative event variants — we only want the base moneyline event.
-const PM_VARIANT = /(more-markets|exact-score|total-corners|player-props|both-teams-to-score)/;
+// Skip derivative event variants. `-more-markets` is kept because that's where
+// the "Team to Advance" market lives.
+const PM_VARIANT = /(exact-score|total-corners|player-props|both-teams-to-score)/;
 
 // token_id → which match/side it represents.
 interface TokenMeta {
@@ -433,16 +435,8 @@ let pmPingTimer: ReturnType<typeof setInterval> | null = null;
 let oddsDirty = false;
 let oddsBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
-function parseYesToken(m: PmMarket): string | null {
-	try {
-		const outcomes = JSON.parse(m.outcomes) as string[];
-		const clobIds = JSON.parse(m.clobTokenIds) as string[];
-		const yesIdx = outcomes.indexOf("Yes");
-		return yesIdx >= 0 ? clobIds[yesIdx] ?? null : null;
-	} catch {
-		return null;
-	}
-}
+// ponytail: outcomes in a Team-to-Advance market are the team names directly
+// (e.g. ["Germany","Paraguay"]), so we map each clobTokenId to its team.
 
 // Pull WC fixtures from Gamma and rebuild token map. Idempotent; safe to
 // call on a timer. New tokens get WS-subscribed on the next reconnect or
@@ -463,26 +457,27 @@ async function bootstrapTokens(): Promise<void> {
 			if (!ev.slug.startsWith("fifwc-")) continue;
 			if (PM_VARIANT.test(ev.slug)) continue;
 
-			const parts = ev.title.split(/\s+vs\.?\s+/);
+			// `-more-markets` titles look like "Germany vs. Paraguay - More Markets";
+			// strip the suffix before splitting on vs.
+			const baseTitle = ev.title.replace(/\s+-\s+.*$/, "");
+			const parts = baseTitle.split(/\s+vs\.?\s+/);
 			if (parts.length !== 2) continue;
 			const homeIdx = pmTeamIdx(parts[0]);
 			const awayIdx = pmTeamIdx(parts[1]);
 			if (homeIdx === null || awayIdx === null) continue;
 			const key = pairKey(homeIdx, awayIdx);
-			const entry: { home?: string; away?: string; draw?: string } = {};
+			const entry: { home?: string; away?: string } = {};
 
 			for (const m of ev.markets ?? []) {
-				const yesTid = parseYesToken(m);
-				if (!yesTid) continue;
-				const winMatch = m.question.match(/^Will (.+?) win on /);
-				if (winMatch) {
-					const idx = pmTeamIdx(winMatch[1]);
-					if (idx === null) continue;
-					if (idx === homeIdx) { entry.home = yesTid; newTokenIndex.set(yesTid, { pairKey: key, teamIdx: homeIdx }); }
-					else if (idx === awayIdx) { entry.away = yesTid; newTokenIndex.set(yesTid, { pairKey: key, teamIdx: awayIdx }); }
-				} else if (/draw/i.test(m.question)) {
-					entry.draw = yesTid;
-					newTokenIndex.set(yesTid, { pairKey: key, teamIdx: -1 });
+				if (m.sportsMarketType !== "soccer_team_to_advance") continue;
+				const outcomes = JSON.parse(m.outcomes) as string[];
+				const clobIds = JSON.parse(m.clobTokenIds) as string[];
+				for (let i = 0; i < outcomes.length; i++) {
+					const idx = pmTeamIdx(outcomes[i]);
+					const tid = clobIds[i];
+					if (idx === null || !tid) continue;
+					if (idx === homeIdx) { entry.home = tid; newTokenIndex.set(tid, { pairKey: key, teamIdx: homeIdx }); }
+					else if (idx === awayIdx) { entry.away = tid; newTokenIndex.set(tid, { pairKey: key, teamIdx: awayIdx }); }
 				}
 			}
 			if (entry.home && entry.away) newPairTokens.set(key, entry);
@@ -528,8 +523,8 @@ function recomputePair(key: string): MatchOdds | null {
 	const awayMeta = tokenIndex.get(entry.away);
 	if (homeMeta) pcts[homeMeta.teamIdx] = homeMid;
 	if (awayMeta) pcts[awayMeta.teamIdx] = awayMid;
-	const draw = entry.draw ? tokenMids.get(entry.draw) ?? 0 : 0;
-	return { pcts, draw };
+	// Team-to-Advance has no draw outcome; always 0.
+	return { pcts, draw: 0 };
 }
 
 // Update one token's mid, recompute its pair, mark dirty for broadcast.
