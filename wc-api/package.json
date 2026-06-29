@@ -10,12 +10,14 @@
   "dependencies": {
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/ws": "^8.5.15",
     "tsx": "^4.22.4",
     "typescript": "~6.0.2"
   }
