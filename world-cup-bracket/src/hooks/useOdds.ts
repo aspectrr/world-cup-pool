@@ -15,7 +15,7 @@ export interface OddsResponse {
 }
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
-const POLL_INTERVAL = 60_000; // backend polls Polymarket every 60s
+const POLL_INTERVAL = 5_000; // backend polls Polymarket every 5s
 
 // SWR cache — see useESPNLive for rationale.
 const CACHE_KEY = "wc2026:odds:v1";

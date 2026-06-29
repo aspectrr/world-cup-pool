@@ -126,7 +126,7 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 				{isLive && (
 					<div className="game-live-indicator">
 						<span className="match-live-dot" />
-						{m.clock}
+						{m.detail === "HT" ? "HT" : m.clock}
 					</div>
 				)}
 				{!isLive && m.date && (
