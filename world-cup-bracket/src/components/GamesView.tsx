@@ -20,6 +20,7 @@ interface GameMatch {
 	status: "scheduled" | "live" | "finished";
 	clock: string;
 	round: string; // "Group A" or "R32" etc
+	detail?: string;
 }
 
 interface DayGroup {
@@ -114,6 +115,9 @@ function GameRow({ m }: { m: GameMatch }) {
 				{!isLive && m.date && (
 					<span className="game-time">{formatTime(m.date)}</span>
 				)}
+				{isFinished && m.detail && (
+					<span className="game-detail">{m.detail}</span>
+				)}
 				<span className="game-round">{m.round}</span>
 			</div>
 		</div>
@@ -202,21 +206,26 @@ export function GamesView({
 		return (upcoming ?? days[days.length - 1]).key;
 	}, [days, todayKey]);
 
-	// selected === null until the user explicitly picks a day. Display falls
-	// back to defaultDay otherwise — so a reload with stale data (defaultDay
-	// initially wrong, then corrected when live data lands) tracks the new
-	// default instead of sticking to the stale initial value.
-	const [selected, setSelected] = useState<string | null>(null);
-	const pickedStillValid =
-		selected !== null && days.some((d) => d.key === selected);
-	const effectiveSelected = pickedStillValid ? selected : defaultDay;
+	const [selected, setSelected] = useState<string | null>(defaultDay);
+	const [lastDefault, setLastDefault] = useState<string | null>(defaultDay);
+
+	// Sync selection to new default *during render* when the default day shifts
+	// (day rolls over, data loads). Adjusting state during render is the
+	// React-recommended way to avoid setState-in-effect cascading renders.
+	if (defaultDay !== lastDefault) {
+		setLastDefault(defaultDay);
+		// Only follow the default if user hasn't manually picked a still-valid day.
+		// If their pick exists in the new day list, keep it; otherwise snap to default.
+		const stillExists = selected && days.some((d) => d.key === selected);
+		setSelected(stillExists ? selected : defaultDay);
+	}
 
 	const stripRef = useRef<HTMLDivElement>(null);
 	const chipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
 	// Keep active chip in view when selection changes.
 	useEffect(() => {
-		const el = effectiveSelected && chipRefs.current.get(effectiveSelected);
+		const el = selected && chipRefs.current.get(selected);
 		if (el) {
 			el.scrollIntoView({
 				behavior: "smooth",
@@ -224,9 +233,9 @@ export function GamesView({
 				block: "nearest",
 			});
 		}
-	}, [effectiveSelected, days]);
+	}, [selected, days]);
 
-	const idx = days.findIndex((d) => d.key === effectiveSelected);
+	const idx = days.findIndex((d) => d.key === selected);
 	const current = idx >= 0 ? days[idx] : null;
 
 	const step = (dir: -1 | 1) => {
@@ -253,7 +262,7 @@ export function GamesView({
 					<div className="games-date-strip" ref={stripRef}>
 						{days.map((d) => {
 							const isToday = d.key === todayKey;
-							const isActive = d.key === effectiveSelected;
+							const isActive = d.key === selected;
 							return (
 								<button
 									type="button"

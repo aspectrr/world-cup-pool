@@ -342,6 +342,66 @@ img {
 	font-weight: 600;
 }
 
+/* ─── STANDING CARD PRIZE TREATMENTS ─── */
+/* Champion/runner-up apply as a live preview from current rank #1/#2 until
+   the FINAL is played (`.projected` = dashed border, lighter glow).
+   First Out is a grayscale "gg ez" card with a gold $5 stamp vibe. */
+.standing-card.prize-champion {
+	background: linear-gradient(
+		135deg,
+		rgba(212, 160, 23, 0.18),
+		rgba(212, 160, 23, 0.04)
+	);
+	box-shadow:
+		0 0 0 1.5px var(--gold),
+		0 0 18px rgba(212, 160, 23, 0.35);
+}
+.standing-card.prize-champion.projected {
+	box-shadow:
+		0 0 0 1.5px dashed var(--gold),
+		0 0 10px rgba(212, 160, 23, 0.2);
+}
+.standing-card.prize-runnerup {
+	background: linear-gradient(
+		135deg,
+		rgba(192, 192, 192, 0.14),
+		rgba(192, 192, 192, 0.03)
+	);
+	box-shadow:
+		0 0 0 1.5px #c0c0c0,
+		0 0 14px rgba(192, 192, 192, 0.25);
+}
+.standing-card.prize-runnerup.projected {
+	box-shadow:
+		0 0 0 1.5px dashed #c0c0c0,
+		0 0 8px rgba(192, 192, 192, 0.15);
+}
+.standing-card.prize-firstout {
+	filter: grayscale(0.85);
+	background: rgba(255, 255, 255, 0.02);
+	box-shadow:
+		0 0 0 1px rgba(196, 30, 58, 0.4),
+		0 1px 2px rgba(0, 0, 0, 0.3);
+	position: relative;
+}
+.standing-card.prize-firstout::after {
+	content: "ELIMINATED";
+	position: absolute;
+	top: 6px;
+	right: 8px;
+	font-family: "Oswald", sans-serif;
+	font-size: 0.55rem;
+	font-weight: 700;
+	letter-spacing: 1.5px;
+	color: var(--red);
+	opacity: 0.5;
+}
+.standing-card.prize-firstout .standing-prize {
+	color: var(--gold-light);
+	font-size: 0.78rem;
+	text-shadow: 0 0 6px rgba(240, 208, 96, 0.4);
+}
+
 /* ─── GROUPS VIEW ─── */
 .groups-grid {
 	display: grid;
@@ -529,7 +589,6 @@ img {
 	max-width: 100%;
 }
 .bracket-slot {
-	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -537,35 +596,25 @@ img {
 	font-size: 0.78rem;
 	border-radius: 4px;
 }
-/* Live clock gets its own row above the team — only the home slot with
- * a live clock gets extra top padding; idle cards stay tight. */
-.bracket-slot:first-child:has(.bracket-live-clock) {
-	padding-top: 16px;
-}
 .bracket-slot + .bracket-slot {
 	border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 .bracket-slot.winner {
 	background: rgba(26, 138, 58, 0.12);
 }
-/* When any slot is live, tint the whole match card red and keep the
- * slots themselves clear — the card bg shows through. */
-.bracket-match:has(.bracket-slot.live) {
+.bracket-slot.live {
 	background: rgba(196, 30, 58, 0.1);
 }
-.bracket-slot.live {
-	background: transparent;
-}
-/* single per-match live clock — transparent bg so the blinking dot
- * stands out against the faded-red live slot tint */
+/* single per-match live clock — replaces the old per-slot dots */
 .bracket-live-clock {
 	position: absolute;
 	top: 1px;
-	right: 3px;
+	right: 4px;
 	display: inline-flex;
 	align-items: center;
 	gap: 3px;
-	color: var(--red);
+	background: rgba(196, 30, 58, 0.9);
+	color: #fff;
 	font-size: 0.55rem;
 	font-weight: 700;
 	letter-spacing: 0.3px;
@@ -574,7 +623,6 @@ img {
 	z-index: 2;
 	line-height: 1.2;
 	pointer-events: none;
-	background: transparent;
 }
 .bracket-live-clock .live-pip {
 	width: 5px;
@@ -583,36 +631,6 @@ img {
 	background: var(--red);
 	animation: livePulse 1.2s ease-in-out infinite;
 	display: inline-block;
-}
-/* feeder matchup preview replacing the old "Winner MXX" placeholder text */
-.seed-preview {
-	display: inline-flex;
-	align-items: center;
-	gap: 3px;
-	flex: 1;
-	min-width: 0;
-	font-size: 0.55rem;
-	color: var(--text-dim);
-	font-variant-numeric: tabular-nums;
-}
-.seed-preview img {
-	width: 14px;
-	height: 10px;
-	border-radius: 1px;
-	flex-shrink: 0;
-}
-.seed-preview .seed-abbr {
-	font-weight: 600;
-	color: var(--text);
-}
-.seed-preview .seed-vs {
-	opacity: 0.5;
-	font-size: 0.5rem;
-}
-.seed-preview .seed-time {
-	opacity: 0.7;
-	font-size: 0.48rem;
-	white-space: nowrap;
 }
 .bracket-slot img {
 	width: 20px;

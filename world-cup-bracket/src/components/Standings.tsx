@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS, PRIZES } from "../data/players";
-import { calcGroupStandings, getAliveTeams } from "../utils/standings";
+import { calcGroupStandings, getAliveTeams, getTeamStage, knockoutWinner } from "../utils/standings";
 
 type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
 
@@ -20,45 +20,7 @@ function stagePoints(stage: Stage): number {
   return STAGE_ORDER.indexOf(stage);
 }
 
-// Determine how far a team got based on knockout results
-function getTeamStage(teamIdx: number, kMatches: KnockoutMatch[]): Stage {
-  let furthest: Stage = "group";
 
-  for (const m of kMatches) {
-    if (!m.played || m.homeScore === null || m.awayScore === null) continue;
-    if (m.homeIdx !== teamIdx && m.awayIdx !== teamIdx) continue;
-
-    const won =
-      (m.homeIdx === teamIdx && m.homeScore > m.awayScore) ||
-      (m.awayIdx === teamIdx && m.awayScore > m.homeScore);
-
-    const stageMap: Record<string, Stage> = {
-      R32: "r32",
-      R16: "r16",
-      QF: "qf",
-      SF: "sf",
-      FINAL: "winner",
-    };
-
-    if (won) {
-      const s = stageMap[m.round] ?? "group";
-      if (STAGE_ORDER.indexOf(s) > STAGE_ORDER.indexOf(furthest)) furthest = s;
-    } else {
-      // Lost = eliminated at this round, stage is one below
-      const elimMap: Record<string, Stage> = {
-        R32: "group",
-        R16: "r32",
-        QF: "r16",
-        SF: "qf",
-        FINAL: "sf",
-      };
-      const s = elimMap[m.round] ?? "group";
-      if (STAGE_ORDER.indexOf(s) > STAGE_ORDER.indexOf(furthest)) furthest = s;
-    }
-  }
-
-  return furthest;
-}
 
 // When was a player's LAST team eliminated?
 // Returns { round, date } — used for first-out tiebreaking by time
@@ -86,15 +48,12 @@ function getLastElimination(
   // Check knockout losses
   for (const tIdx of teamIndices) {
     for (const m of kMatches) {
-      if (!m.played || m.homeScore === null || m.awayScore === null) continue;
       if (m.homeIdx !== tIdx && m.awayIdx !== tIdx) continue;
-      const lost =
-        (m.homeIdx === tIdx && m.homeScore < m.awayScore) ||
-        (m.awayIdx === tIdx && m.awayScore < m.homeScore);
-      if (lost) {
-        const roundIdx = ["R32", "R16", "QF", "SF", "FINAL"].indexOf(m.round);
-        update(roundIdx, m.date ?? "");
-      }
+      const w = knockoutWinner(m);
+      if (w === null) continue;
+      if (w === tIdx) continue; // won this match, not eliminated here
+      const roundIdx = ["R32", "R16", "QF", "SF", "FINAL"].indexOf(m.round);
+      update(roundIdx, m.date ?? "");
     }
   }
 
@@ -216,30 +175,23 @@ export function Standings({
       let runnerUpPlayer: string | null = null;
       let firstOutPlayer: string | null = null;
 
-      // Champion = player who owns the WC winner (team that won the FINAL)
+      // Champion = player who owns the WC winner (team that won the FINAL).
+      // Uses knockoutWinner so penalty-shootout wins (tied score) count.
       const finalMatch = kMatches.find((m) => m.round === "FINAL" && m.played);
-      if (
-        finalMatch &&
-        finalMatch.homeScore !== null &&
-        finalMatch.awayScore !== null
-      ) {
-        const winnerIdx =
-          finalMatch.homeScore > finalMatch.awayScore
-            ? finalMatch.homeIdx
-            : finalMatch.awayIdx;
-        const loserIdx =
-          finalMatch.homeScore > finalMatch.awayScore
-            ? finalMatch.awayIdx
-            : finalMatch.homeIdx;
-
+      if (finalMatch) {
+        const winnerIdx = knockoutWinner(finalMatch);
         if (winnerIdx !== null) {
+          const loserIdx =
+            winnerIdx === finalMatch.homeIdx
+              ? finalMatch.awayIdx
+              : finalMatch.homeIdx;
           for (const p of PLAYERS) {
             if (p.teamIndices.includes(winnerIdx)) championPlayer = p.name;
           }
-        }
-        if (loserIdx !== null) {
-          for (const p of PLAYERS) {
-            if (p.teamIndices.includes(loserIdx)) runnerUpPlayer = p.name;
+          if (loserIdx !== null) {
+            for (const p of PLAYERS) {
+              if (p.teamIndices.includes(loserIdx)) runnerUpPlayer = p.name;
+            }
           }
         }
       }
@@ -265,19 +217,27 @@ export function Standings({
       };
     }, [gMatches, kMatches, alive]);
 
+  // Live preview: until the FINAL is played, project champion/runner-up
+  // from the current standings leader (#1 = on pace for champion, #2 =
+  // runner-up). Once the final is decided, the real winner/loser overrides.
+  const projectedChampion = !championPlayer && rankings[0]?.name;
+  const projectedRunnerUp = !runnerUpPlayer && rankings[1]?.name;
+  const championDisplay = championPlayer ?? projectedChampion ?? null;
+  const runnerUpDisplay = runnerUpPlayer ?? projectedRunnerUp ?? null;
+
   return (
     <div>
       <div className="prize-legend">
         <div className="prize-item">
           <div className="amount">${PRIZES.winner}</div>
-          <div className={`label${championPlayer ? " prize-won" : ""}`}>
-            {championPlayer ?? "Winner"}
+          <div className={`label${championDisplay ? " prize-won" : ""}`}>
+            {championDisplay ?? "Winner"}
           </div>
         </div>
         <div className="prize-item">
           <div className="amount">${PRIZES.runnerUp}</div>
-          <div className={`label${runnerUpPlayer ? " prize-won" : ""}`}>
-            {runnerUpPlayer ?? "Runner-up"}
+          <div className={`label${runnerUpDisplay ? " prize-won" : ""}`}>
+            {runnerUpDisplay ?? "Runner-up"}
           </div>
         </div>
         <div className="prize-item">
@@ -293,17 +253,38 @@ export function Standings({
           const rankClass =
             i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "";
 
-          // Determine prize label for this player
+          // Determine prize label + container class for this player.
+          // Champion/runner-up container treatment is a live preview from
+          // current rank until the FINAL is actually played.
           let prizeLabel: string | null = null;
-          if (p.name === championPlayer)
+          let cardPrizeClass = "";
+          if (p.name === championPlayer) {
             prizeLabel = `🏆 $${PRIZES.winner} — Champion`;
-          else if (p.name === runnerUpPlayer)
+            cardPrizeClass = " prize-champion";
+          } else if (p.name === runnerUpPlayer) {
             prizeLabel = `🥈 $${PRIZES.runnerUp} — Runner-up`;
-          else if (p.name === firstOutPlayer)
-            prizeLabel = `💸 $${PRIZES.firstOut} — First Out`;
+            cardPrizeClass = " prize-runnerup";
+          } else if (p.name === projectedChampion) {
+            prizeLabel = `📊 $${PRIZES.winner} — Projected Champion`;
+            cardPrizeClass = " prize-champion projected";
+          } else if (p.name === projectedRunnerUp) {
+            prizeLabel = `📊 $${PRIZES.runnerUp} — Projected Runner-up`;
+            cardPrizeClass = " prize-runnerup projected";
+          }
+
+          // Every eliminated player gets the grayscale ELIMINATED treatment.
+          // Only the first-out additionally gets the gold $5 badge.
+          if (p.eliminated) {
+            cardPrizeClass = " prize-firstout";
+            if (p.name === firstOutPlayer) {
+              prizeLabel = `💸 $${PRIZES.firstOut} — First Out`;
+            } else {
+              prizeLabel = `☠️ Eliminated`;
+            }
+          }
 
           return (
-            <div key={p.name} className="standing-card">
+            <div key={p.name} className={`standing-card${cardPrizeClass}`}>
               <div className={`standing-rank ${rankClass}`}>{i + 1}</div>
               <div className="standing-info">
                 <div className="standing-name">{p.name}</div>

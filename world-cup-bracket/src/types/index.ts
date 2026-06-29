@@ -25,6 +25,7 @@ export interface GroupMatch {
 	status?: MatchStatus;
 	clock?: string; // e.g. "45'+2'"
 	date?: string; // ISO datetime from ESPN, e.g. "2026-06-11T19:00Z"
+	detail?: string; // ESPN status detail e.g. "FT", "FT aet", "Pen"
 }
 
 export interface KnockoutMatch {
@@ -40,6 +41,11 @@ export interface KnockoutMatch {
 	date?: string; // ISO datetime — static schedule or live ESPN
 	homeSeed: string; // e.g. "1A" = winner of group A, "2B" = runner-up, "3C" = 3rd place group C
 	awaySeed: string;
+	// Winner team idx when the game was decided by ET or pens (score tied).
+	// ESPN sets this via the competitor `winner` flag. Null for regulation wins
+	// — fall back to score difference.
+	winnerIdx?: number | null;
+	detail?: string; // ESPN status detail e.g. "FT", "FT aet", "Pen"
 }
 
 export type Match = GroupMatch | KnockoutMatch;

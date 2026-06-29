@@ -1,5 +1,22 @@
-import type { GroupMatch, GroupStanding } from "../types";
+import type { GroupMatch, GroupStanding, KnockoutMatch } from "../types";
 import { TEAMS, GROUPS } from "../data/teams";
+
+/**
+ * Winner team idx of a played knockout match. Prefers ESPN's explicit
+ * `winner` flag (set for ET/pen wins where regulation score is tied),
+ * falls back to score difference for regulation results. Returns null for
+ * unplayed/drawn matches.
+ */
+export function knockoutWinner(
+	m: Pick<KnockoutMatch, "played" | "homeIdx" | "awayIdx" | "homeScore" | "awayScore" | "winnerIdx">,
+): number | null {
+	if (!m.played || m.homeScore === null || m.awayScore === null) return null;
+	if (m.homeIdx === null || m.awayIdx === null) return null;
+	if (m.winnerIdx !== null && m.winnerIdx !== undefined) return m.winnerIdx;
+	if (m.homeScore > m.awayScore) return m.homeIdx;
+	if (m.awayScore > m.homeScore) return m.awayIdx;
+	return null;
+}
 
 /** Compare two standings rows: points, GD, GF, then preset groupPos */
 function compareStandings(a: GroupStanding, b: GroupStanding): number {
@@ -95,13 +112,7 @@ export function calcGroupStandings(
  */
 export function getAliveTeams(
 	gMatches: GroupMatch[],
-	kMatches: {
-		played: boolean;
-		homeIdx: number | null;
-		awayIdx: number | null;
-		homeScore: number | null;
-		awayScore: number | null;
-	}[],
+	kMatches: KnockoutMatch[],
 ): Set<number> {
 	const groupStageDone =
 		gMatches.length > 0 && gMatches.every((m) => m.played);
@@ -121,10 +132,10 @@ export function getAliveTeams(
 
 	// Drop losers of played knockout matches
 	for (const m of kMatches) {
-		if (!m.played || m.homeScore === null || m.awayScore === null) continue;
+		const w = knockoutWinner(m);
+		if (w === null) continue;
 		if (m.homeIdx === null || m.awayIdx === null) continue;
-		if (m.homeScore > m.awayScore) alive.delete(m.awayIdx);
-		else if (m.awayScore > m.homeScore) alive.delete(m.homeIdx);
+		alive.delete(w === m.homeIdx ? m.awayIdx : m.homeIdx);
 	}
 	return alive;
 }
@@ -175,72 +186,41 @@ export function getClinchedGroupWinners(gMatches: GroupMatch[]): Set<number> {
 /** How far a team has progressed: group, r32, r16, qf, sf, final, winner */
 export type Stage = "group" | "r32" | "r16" | "qf" | "sf" | "final" | "winner";
 
-export function getTeamStage(
-	teamIdx: number,
-	kMatches: {
-		round: string;
-		played: boolean;
-		homeIdx: number | null;
-		awayIdx: number | null;
-		homeScore: number | null;
-		awayScore: number | null;
-	}[],
-): Stage {
-	// Find furthest round where this team won
+export function getTeamStage(teamIdx: number, kMatches: KnockoutMatch[]): Stage {
+	// Furthest round this team reached. A team that lost in round R is
+	// credited with the stage *below* R (they didn't advance past it).
 	let furthest: Stage = "group";
 
+	const WIN_STAGE: Record<string, Stage> = {
+		R32: "r32",
+		R16: "r16",
+		QF: "qf",
+		SF: "sf",
+		FINAL: "winner",
+	};
+	const LOSE_STAGE: Record<string, Stage> = {
+		R32: "group",
+		R16: "r32",
+		QF: "r16",
+		SF: "qf",
+		FINAL: "sf",
+	};
+	const ORDER: Stage[] = [
+		"group",
+		"r32",
+		"r16",
+		"qf",
+		"sf",
+		"final",
+		"winner",
+	];
+
 	for (const m of kMatches) {
-		if (!m.played || m.homeScore === null || m.awayScore === null) continue;
 		if (m.homeIdx !== teamIdx && m.awayIdx !== teamIdx) continue;
-
-		const won =
-			(m.homeIdx === teamIdx && m.homeScore > m.awayScore) ||
-			(m.awayIdx === teamIdx && m.awayScore > m.homeScore);
-
-		if (won) {
-			const stageMap: Record<string, Stage> = {
-				R32: "r32",
-				R16: "r16",
-				QF: "qf",
-				SF: "sf",
-				FINAL: "winner",
-			};
-			const s = stageMap[m.round] ?? "group";
-			const order: Stage[] = [
-				"group",
-				"r32",
-				"r16",
-				"qf",
-				"sf",
-				"final",
-				"winner",
-			];
-			if (order.indexOf(s) > order.indexOf(furthest)) {
-				furthest = s;
-			}
-		} else {
-			// Lost — they're eliminated at this round
-			const stageMap: Record<string, Stage> = {
-				R32: "group",
-				R16: "r32",
-				QF: "r16",
-				SF: "qf",
-				FINAL: "sf",
-			};
-			const s = stageMap[m.round] ?? "group";
-			const order: Stage[] = [
-				"group",
-				"r32",
-				"r16",
-				"qf",
-				"sf",
-				"final",
-				"winner",
-			];
-			if (order.indexOf(s) > order.indexOf(furthest)) {
-				furthest = s;
-			}
-		}
+		const w = knockoutWinner(m);
+		if (w === null) continue; // unplayed or genuinely drawn
+		const s = (w === teamIdx ? WIN_STAGE : LOSE_STAGE)[m.round] ?? "group";
+		if (ORDER.indexOf(s) > ORDER.indexOf(furthest)) furthest = s;
 	}
 
 	return furthest;

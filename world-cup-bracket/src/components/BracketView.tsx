@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
+import { knockoutWinner } from "../utils/standings";
 
 // teamIdx -> owning player name
 const TEAM_OWNER = new Map<number, string>();
@@ -9,84 +10,25 @@ for (const p of PLAYERS) {
 	for (const idx of p.teamIndices) TEAM_OWNER.set(idx, p.name);
 }
 
-function formatKickoff(iso?: string): string {
-	if (!iso) return "";
-	const d = new Date(iso);
-	return d.toLocaleDateString("en-US", {
-		month: "short",
-		day: "numeric",
-		hour: "numeric",
-		minute: "2-digit",
-	});
-}
-
-// FIFA-style 3-letter abbreviations; default to first-3 of name with
-// overrides for multi-word / ambiguous codes.
-const ABBR_OVERRIDE: Record<string, string> = {
-	us: "USA",
-	ba: "BIH",
-	cd: "COD",
-	cv: "CPV",
-	ci: "CIV",
-	ch: "SUI",
-	at: "AUT",
-	gb: "ENG",
-};
-function abbr(name: string, code: string): string {
-	return ABBR_OVERRIDE[code] ?? name.slice(0, 3).toUpperCase();
-}
-
-/** Render a "Winner MXX" slot as a feeder matchup preview:
- * [flag abbr v flag abbr datetime] when both feeder teams are known. */
-function SeedPreview({
-	seed,
-	matchById,
-}: {
-	seed: string;
-	matchById: Map<string, KnockoutMatch>;
-}) {
-	const feederId = seed.match(/Winner (\w+)/)?.[1] ?? null;
-	const feeder = feederId ? matchById.get(feederId) : undefined;
-	const h = feeder?.homeIdx !== null && feeder?.homeIdx !== undefined ? TEAMS[feeder.homeIdx] : null;
-	const a = feeder?.awayIdx !== null && feeder?.awayIdx !== undefined ? TEAMS[feeder.awayIdx] : null;
-	if (!h || !a) return <span className="tbd">{seed}</span>;
-	return (
-		<span className="seed-preview">
-			<img src={flagUrl(h.code)} alt={h.code} />
-			<span className="seed-abbr">{abbr(h.name, h.code)}</span>
-			<span className="seed-vs">v</span>
-			<img src={flagUrl(a.code)} alt={a.code} />
-			<span className="seed-abbr">{abbr(a.name, a.code)}</span>
-			{feeder?.date && (
-				<span className="seed-time">{formatKickoff(feeder.date)}</span>
-			)}
-		</span>
-	);
-}
-
 function MatchCard({
 	m,
 	liveTeamIdxs,
-	matchById,
 }: {
 	m: KnockoutMatch;
 	liveTeamIdxs: Set<number>;
-	matchById: Map<string, KnockoutMatch>;
 }) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
 	const away = m.awayIdx !== null ? TEAMS[m.awayIdx] : null;
 	const homeLive = m.homeIdx !== null && liveTeamIdxs.has(m.homeIdx);
 	const awayLive = m.awayIdx !== null && liveTeamIdxs.has(m.awayIdx);
-	const homeWon =
+	const winnerIdx = knockoutWinner(m);
+	const homeWon = winnerIdx !== null && winnerIdx === m.homeIdx;
+	const awayWon = winnerIdx !== null && winnerIdx === m.awayIdx;
+	const isETorPens =
 		m.played &&
 		m.homeScore !== null &&
 		m.awayScore !== null &&
-		m.homeScore > m.awayScore;
-	const awayWon =
-		m.played &&
-		m.homeScore !== null &&
-		m.awayScore !== null &&
-		m.awayScore > m.homeScore;
+		m.homeScore === m.awayScore;
 
 	return (
 		<div className="bracket-match">
@@ -104,7 +46,7 @@ function MatchCard({
 						<span className="owner">{TEAM_OWNER.get(m.homeIdx!)}</span>
 					</>
 				) : (
-					<SeedPreview seed={m.homeSeed} matchById={matchById} />
+					<span className="tbd">{m.homeSeed}</span>
 				)}
 				{m.played && m.homeScore !== null && (
 					<span className="score">{m.homeScore}</span>
@@ -118,12 +60,15 @@ function MatchCard({
 						<span className="owner">{TEAM_OWNER.get(m.awayIdx!)}</span>
 					</>
 				) : (
-					<SeedPreview seed={m.awaySeed} matchById={matchById} />
+					<span className="tbd">{m.awaySeed}</span>
 				)}
 				{m.played && m.awayScore !== null && (
 					<span className="score">{m.awayScore}</span>
 				)}
 			</div>
+			{m.played && m.detail && isETorPens && (
+				<div className="bracket-match-detail">{m.detail}</div>
+			)}
 		</div>
 	);
 }
@@ -160,10 +105,6 @@ export function BracketView({
 	matches: KnockoutMatch[];
 	liveTeamIdxs: Set<number>;
 }) {
-	const matchById = useMemo(
-		() => new Map(matches.map((m) => [m.id, m])),
-		[matches],
-	);
 	const rounds = ROUND_ORDER.map((round) => ({
 		round,
 		matches: matches.filter((m) => m.round === round),
@@ -229,7 +170,7 @@ export function BracketView({
 										gridRow: `${i * span + 1} / span ${span}`,
 									}}
 								>
-									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} matchById={matchById} />
+									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} />
 								</div>
 							);
 						}),
