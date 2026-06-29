@@ -362,7 +362,7 @@ let oddsLastPoll: Date | null = null;
 let oddsError: string | null = null;
 
 const GAMMA_EVENTS_URL = "https://gamma-api.polymarket.com/events";
-const ODDS_POLL_INTERVAL = 60_000;
+const ODDS_POLL_INTERVAL = 5_000;
 
 // Skip derivative event variants — we only want the base moneyline event.
 const PM_VARIANT = /(more-markets|exact-score|total-corners|player-props|both-teams-to-score)/;
