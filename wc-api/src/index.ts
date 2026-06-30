@@ -622,7 +622,7 @@ function scheduleOddsBroadcast(): void {
 		oddsDirty = false;
 		broadcast({
 			type: "odds",
-			payload: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
+			payload: { odds: oddsCache, winnerProbs, lastPoll: oddsLastPoll?.toISOString() ?? null },
 		});
 	}, BROADCAST_THROTTLE);
 }

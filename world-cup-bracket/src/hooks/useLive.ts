@@ -209,8 +209,12 @@ export function useLive(): LiveData {
 				} else if (msg.type === "odds" && msg.payload) {
 					const o = msg.payload as OddsPayload;
 					setOdds(o.odds ?? {});
-					setWinnerProbs(o.winnerProbs ?? {});
-					writeOddsCache(o.odds ?? {}, o.winnerProbs ?? {});
+					// Only update winnerProbs if the delta actually carries them —
+					// an older/partial server would otherwise wipe good data.
+					if (o.winnerProbs) {
+						setWinnerProbs(o.winnerProbs);
+						writeOddsCache(o.odds ?? {}, o.winnerProbs);
+					}
 					setLastUpdated(new Date());
 				}
 			};

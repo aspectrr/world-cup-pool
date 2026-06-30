@@ -94,7 +94,7 @@ export function Standings({
     [gMatches, kMatches],
   );
 
-  const { rankings, championPlayer, runnerUpPlayer, firstOutPlayer } =
+  const { rankings, hasWinnerData, championPlayer, runnerUpPlayer, firstOutPlayer } =
     useMemo(() => {
       // Pre-compute group standings once to derive per-player point/GD totals
       const groupMap = calcGroupStandings(gMatches);
@@ -200,6 +200,7 @@ export function Standings({
 
       return {
         rankings: scores,
+        hasWinnerData: scores.some((s) => s.equity > 0),
         championPlayer,
         runnerUpPlayer,
         firstOutPlayer,
@@ -297,9 +298,15 @@ export function Standings({
               <div className="standing-stats">
                 <div
                   className={`standing-alive${p.alive === 0 ? " none" : ""}`}
-                  title="Champion equity: Σ P(team wins WC)"
+                  title={
+                    hasWinnerData
+                      ? "Champion equity: Σ P(team wins WC)"
+                      : "Teams still alive"
+                  }
                 >
-                  {(p.equity * 100).toFixed(1)}%
+                  {hasWinnerData
+                    ? `${(p.equity * 100).toFixed(1)}%`
+                    : `${p.alive}/6`}
                 </div>
                 <div className="standing-record">
                   {p.eliminated
