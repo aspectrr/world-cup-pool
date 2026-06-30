@@ -446,14 +446,31 @@ let oddsBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
 // Pull WC fixtures from Gamma and rebuild token map. Idempotent; safe to
 // call on a timer. New tokens get WS-subscribed on the next reconnect or
 // via a dynamic subscribe if the socket is already open.
+//
+// ponytail: Gamma's default `volume24hr` sort is unstable across pages and
+// cuts off fresh low-volume knockout markets (e.g. USA-BIH, BEL-SEN before
+// they heat up). We paginate 4 offset pages and dedup by slug — covers
+// ~120 fifwc events empirically. Swap to a slug-prefix query if Gamma ever
+// adds one; bump page count if total fifwc events exceed ~400.
 async function bootstrapTokens(): Promise<void> {
 	try {
-		const url =
-			`${GAMMA_EVENTS_URL}?limit=300&closed=false` +
-			`&order=volume24hr&ascending=false&tag=soccer`;
-		const res = await fetch(url);
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		const events = (await res.json()) as PmEvent[];
+		const events: PmEvent[] = [];
+		const seen = new Set<string>();
+		for (const offset of [0, 100, 200, 300]) {
+			const url =
+				`${GAMMA_EVENTS_URL}?limit=100&offset=${offset}` +
+				`&closed=false&order=volume24hr&ascending=false&tag_id=102232`;
+			const res = await fetch(url);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const page = (await res.json()) as PmEvent[];
+			if (!page.length) break;
+			for (const ev of page) {
+				if (ev.slug && !seen.has(ev.slug)) {
+					seen.add(ev.slug);
+					events.push(ev);
+				}
+			}
+		}
 
 		const newPairTokens = new Map<string, { home?: string; away?: string; draw?: string }>();
 		const newTokenIndex = new Map<string, TokenMeta>();
