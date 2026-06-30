@@ -305,7 +305,7 @@ export function Standings({
                   }
                 >
                   {hasWinnerData
-                    ? `${(p.equity * 100).toFixed(1)}%`
+                    ? `${(p.equity * 100).toFixed(2)}%`
                     : `${p.alive}/6`}
                 </div>
                 <div className="standing-record">
