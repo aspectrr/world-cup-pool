@@ -342,7 +342,7 @@ export default function App() {
 			) : (
 				<>
 					{effectiveTab === "standings" && (
-						<Standings gMatches={gMatches} kMatches={kMatches} />
+						<Standings gMatches={gMatches} kMatches={kMatches} winnerProbs={live.winnerProbs} />
 					)}
 					{effectiveTab === "games" && (
 						<GamesView

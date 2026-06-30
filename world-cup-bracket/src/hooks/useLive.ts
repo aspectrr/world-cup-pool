@@ -31,6 +31,7 @@ export interface MatchOdds {
 
 export interface OddsPayload {
 	odds: Record<string, MatchOdds>;
+	winnerProbs?: Record<number, number>; // teamIdx → P(win WC)
 	lastPoll: string | null;
 }
 
@@ -57,7 +58,7 @@ export function oddsKey(a: number, b: number): string {
 // ── localStorage SWR cache (instant hydrate on reload) ───────────────
 
 const MATCHES_KEY = "wc2026:results:v1";
-const ODDS_KEY = "wc2026:odds:v1";
+const ODDS_KEY = "wc2026:odds:v2";
 
 function readMatchesCache(): ServerMatch[] | null {
 	try {
@@ -70,13 +71,13 @@ function readMatchesCache(): ServerMatch[] | null {
 	}
 }
 
-function readOddsCache(): { odds: Record<string, MatchOdds>; savedAt: string } | null {
+function readOddsCache(): { odds: Record<string, MatchOdds>; winnerProbs: Record<number, number>; savedAt: string } | null {
 	try {
 		const raw = localStorage.getItem(ODDS_KEY);
 		if (!raw) return null;
-		const parsed = JSON.parse(raw) as { odds?: Record<string, MatchOdds>; savedAt?: string };
+		const parsed = JSON.parse(raw) as { odds?: Record<string, MatchOdds>; winnerProbs?: Record<number, number>; savedAt?: string };
 		if (!parsed.odds) return null;
-		return { odds: parsed.odds, savedAt: parsed.savedAt ?? "" };
+		return { odds: parsed.odds, winnerProbs: parsed.winnerProbs ?? {}, savedAt: parsed.savedAt ?? "" };
 	} catch {
 		return null;
 	}
@@ -88,9 +89,9 @@ function writeMatchesCache(matches: ServerMatch[]): void {
 	} catch { /* quota / private mode */ }
 }
 
-function writeOddsCache(odds: Record<string, MatchOdds>): void {
+function writeOddsCache(odds: Record<string, MatchOdds>, winnerProbs: Record<number, number>): void {
 	try {
-		localStorage.setItem(ODDS_KEY, JSON.stringify({ odds, savedAt: new Date().toISOString() }));
+		localStorage.setItem(ODDS_KEY, JSON.stringify({ odds, winnerProbs, savedAt: new Date().toISOString() }));
 	} catch { /* best-effort */ }
 }
 
@@ -113,6 +114,7 @@ async function fetchOdds(): Promise<OddsResponse> {
 export interface LiveData {
 	matches: ServerMatch[];
 	odds: Record<string, MatchOdds>;
+	winnerProbs: Record<number, number>;
 	lastUpdated: Date | null;
 	loading: boolean;
 	error: string | null;
@@ -127,6 +129,7 @@ const FALLBACK_POLL = 30_000;
 export function useLive(): LiveData {
 	const [matches, setMatches] = useState<ServerMatch[]>(() => readMatchesCache() ?? []);
 	const [odds, setOdds] = useState<Record<string, MatchOdds>>(() => readOddsCache()?.odds ?? {});
+	const [winnerProbs, setWinnerProbs] = useState<Record<number, number>>(() => readOddsCache()?.winnerProbs ?? {});
 	const cachedAt = readOddsCache()?.savedAt ?? readMatchesCacheSaveAt();
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(() =>
 		cachedAt ? new Date(cachedAt) : null,
@@ -149,7 +152,8 @@ export function useLive(): LiveData {
 				setMatches(r.matches);
 				writeMatchesCache(r.matches);
 				setOdds(o.odds ?? {});
-				writeOddsCache(o.odds ?? {});
+				setWinnerProbs(o.winnerProbs ?? {});
+				writeOddsCache(o.odds ?? {}, o.winnerProbs ?? {});
 				setLastUpdated(new Date());
 				const err = r.error ?? o.error;
 				if (err) setError(err);
@@ -191,7 +195,8 @@ export function useLive(): LiveData {
 					}
 					if (o) {
 						setOdds(o.odds ?? {});
-						writeOddsCache(o.odds ?? {});
+						setWinnerProbs(o.winnerProbs ?? {});
+						writeOddsCache(o.odds ?? {}, o.winnerProbs ?? {});
 					}
 					setLastUpdated(new Date());
 					setError(null);
@@ -204,7 +209,8 @@ export function useLive(): LiveData {
 				} else if (msg.type === "odds" && msg.payload) {
 					const o = msg.payload as OddsPayload;
 					setOdds(o.odds ?? {});
-					writeOddsCache(o.odds ?? {});
+					setWinnerProbs(o.winnerProbs ?? {});
+					writeOddsCache(o.odds ?? {}, o.winnerProbs ?? {});
 					setLastUpdated(new Date());
 				}
 			};
@@ -235,7 +241,7 @@ export function useLive(): LiveData {
 				.then((r) => { setMatches(r.matches); writeMatchesCache(r.matches); setLastUpdated(new Date()); })
 				.catch(() => { /* the loading/error path handles user feedback */ });
 			fetchOdds()
-				.then((o) => { setOdds(o.odds ?? {}); writeOddsCache(o.odds ?? {}); })
+				.then((o) => { setOdds(o.odds ?? {}); setWinnerProbs(o.winnerProbs ?? {}); writeOddsCache(o.odds ?? {}, o.winnerProbs ?? {}); })
 				.catch(() => { /* ditto */ });
 		}, FALLBACK_POLL);
 
@@ -248,7 +254,7 @@ export function useLive(): LiveData {
 		};
 	}, [fetchNow]);
 
-	return { matches, odds, lastUpdated, loading, error, connected, fetchNow };
+	return { matches, odds, winnerProbs, lastUpdated, loading, error, connected, fetchNow };
 }
 
 // Lazy init helper: read the matches cache's savedAt without re-parsing twice.
