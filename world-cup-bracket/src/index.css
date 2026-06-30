@@ -1203,6 +1203,13 @@ img {
 	font-variant-numeric: tabular-nums;
 	color: var(--gold-light);
 }
+/* Penalty shootout winner in a knockout tie — scores are level, so the
+	 advancing side gets a marker so the result reads at a glance. */
+.game-score-num.pens-won {
+	background: color-mix(in srgb, var(--gold) 22%, transparent);
+	border-radius: 4px;
+	padding: 0 4px;
+}
 .game-score-dash {
 	font-size: 0.85rem;
 	color: var(--text-dim);
@@ -1233,6 +1240,26 @@ img {
 	color: var(--text-dim);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
+}
+/* Finished-match exception badges. Plain FT is intentionally not shown —
+   the dimmed row + scores already signal finished. Pens = gold (advancing
+   side), AET = blue (decided in extra time). */
+.game-badge {
+	font-size: 0.55rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	padding: 1px 5px;
+	border-radius: 8px;
+	line-height: 1.4;
+}
+.game-badge-pens {
+	color: var(--gold-light);
+	background: color-mix(in srgb, var(--gold) 22%, transparent);
+}
+.game-badge-aet {
+	color: #9ec5fe;
+	background: rgba(60, 120, 200, 0.2);
 }
 
 /* ─── SECTION HEADERS ─── */
