@@ -81,15 +81,6 @@ function MatchCard({
 	const winnerIdx = knockoutWinner(m);
 	const homeWon = winnerIdx !== null && winnerIdx === m.homeIdx;
 	const awayWon = winnerIdx !== null && winnerIdx === m.awayIdx;
-	// ET/pen-detail text only applies once a tied game is FINISHED — during
-	// a live 0-0 game `played` is true but the detail (ESPN clock-like text)
-	// would otherwise leak into the away slot as plain text.
-	const isETorPens =
-		m.played &&
-		m.status === "finished" &&
-		m.homeScore !== null &&
-		m.awayScore !== null &&
-		m.homeScore === m.awayScore;
 
 	return (
 		<div className="bracket-match">
@@ -125,9 +116,6 @@ function MatchCard({
 				)}
 				{m.played && m.awayScore !== null && (
 					<span className="score">{m.awayScore}</span>
-				)}
-				{m.played && m.detail && isETorPens && (
-					<div className="bracket-match-detail">{m.detail}</div>
 				)}
 			</div>
 		</div>
