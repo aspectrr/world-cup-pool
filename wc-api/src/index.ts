@@ -380,7 +380,8 @@ function pmTeamIdx(name: string): number | null {
 interface PmMarket {
 	question: string;
 	sportsMarketType?: string;
-	outcomes: string; // JSON-encoded, e.g. '["Germany","Paraguay"]'
+	groupItemTitle?: string; // team name for World Cup Winner markets
+	outcomes: string; // JSON-encoded, e.g. '["Germany","Paraguay"]' or '["Yes","No"]'
 	outcomePrices: string; // JSON-encoded
 	clobTokenIds: string; // JSON-encoded: [homeTokenId, awayTokenId]
 }
@@ -403,6 +404,8 @@ interface MatchOdds {
 }
 
 let oddsCache: Record<string, MatchOdds> = {};
+// teamIdx → implied P(team wins 2026 WC), from the World Cup Winner market.
+let winnerProbs: Record<number, number> = {};
 let oddsLastPoll: Date | null = null;
 let oddsError: string | null = null;
 
@@ -429,6 +432,8 @@ const tokenIndex = new Map<string, TokenMeta>();
 const pairTokens = new Map<string, { home?: string; away?: string; draw?: string }>();
 // token_id → latest mid price (implied prob).
 const tokenMids = new Map<string, number>();
+// World Cup Winner market: tokenId → teamIdx (Yes outcome).
+const winnerTokenIndex = new Map<string, number>();
 
 let pmWs: WebSocket | null = null;
 let pmPingTimer: ReturnType<typeof setInterval> | null = null;
@@ -511,6 +516,60 @@ async function bootstrapTokens(): Promise<void> {
 	}
 }
 
+// Bootstrap the World Cup Winner market (slug: world-cup-winner). Each
+// sub-market is a Yes/No on one team; we take the Yes token and track its
+// mid as that team's P(win WC). Used for champion-equity standings.
+async function bootstrapWinnerTokens(): Promise<void> {
+	try {
+		const res = await fetch(`${GAMMA_EVENTS_URL}?slug=world-cup-winner`);
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		const events = (await res.json()) as PmEvent[];
+		const ev = events[0];
+		if (!ev?.markets?.length) return;
+
+		const newIndex = new Map<string, number>();
+		const seeded: Record<number, number> = {};
+		for (const m of ev.markets) {
+			const teamIdx = m.groupItemTitle != null ? pmTeamIdx(m.groupItemTitle) : null;
+			if (teamIdx === null) continue;
+			const outcomes = JSON.parse(m.outcomes) as string[];
+			const clobIds = JSON.parse(m.clobTokenIds) as string[];
+			const prices = JSON.parse(m.outcomePrices) as string[];
+			const yesIdx = outcomes.findIndex((o) => o.toLowerCase() === "yes");
+			if (yesIdx < 0) continue;
+			const tid = clobIds[yesIdx];
+			if (!tid) continue;
+			newIndex.set(tid, teamIdx);
+			const seed = Number(prices[yesIdx]);
+			if (Number.isFinite(seed)) seeded[teamIdx] = seed;
+		}
+
+		const added = [...newIndex.keys()].filter((t) => !winnerTokenIndex.has(t));
+		winnerTokenIndex.clear();
+		for (const [tid, idx] of newIndex) winnerTokenIndex.set(tid, idx);
+		// Seed initial probs from outcomePrices so the UI shows something
+		// before the first best_bid_ask fires.
+		for (const [idx, p] of Object.entries(seeded)) {
+			if (winnerProbs[Number(idx)] === undefined) winnerProbs[Number(idx)] = p;
+		}
+
+		console.log(
+			`[odds] ${new Date().toISOString()} — winner market: ${winnerTokenIndex.size} teams (+${added.length})`,
+		);
+
+		if (added.length && pmWs?.readyState === WebSocket.OPEN) {
+			pmWs.send(JSON.stringify({
+				assets_ids: added,
+				type: "market",
+				custom_feature_enabled: true,
+			}));
+			scheduleOddsBroadcast();
+		}
+	} catch (e) {
+		console.error(`[odds] winner bootstrap failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+	}
+}
+
 // Recompute a pair's MatchOdds from stored token mids.
 function recomputePair(key: string): MatchOdds | null {
 	const entry = pairTokens.get(key);
@@ -530,9 +589,21 @@ function recomputePair(key: string): MatchOdds | null {
 // Update one token's mid, recompute its pair, mark dirty for broadcast.
 function onTopOfBook(tokenId: string, bid: number, ask: number): void {
 	if (!Number.isFinite(bid) || !Number.isFinite(ask)) return;
+	const mid = (bid + ask) / 2;
+
+	// World Cup Winner token?
+	const winnerTeamIdx = winnerTokenIndex.get(tokenId);
+	if (winnerTeamIdx !== undefined) {
+		winnerProbs[winnerTeamIdx] = mid;
+		oddsLastPoll = new Date();
+		oddsError = null;
+		scheduleOddsBroadcast();
+		return;
+	}
+
 	const meta = tokenIndex.get(tokenId);
 	if (!meta) return; // not a WC token (e.g. echo from a previous cycle)
-	tokenMids.set(tokenId, (bid + ask) / 2);
+	tokenMids.set(tokenId, mid);
 	const updated = recomputePair(meta.pairKey);
 	if (updated) {
 		oddsCache[meta.pairKey] = updated;
@@ -563,7 +634,7 @@ function connectPolymarketWS(): void {
 	pmWs.onopen = () => {
 		console.log(`[odds] ${new Date().toISOString()} — ws open`);
 		oddsError = null;
-		const ids = [...tokenIndex.keys()];
+		const ids = [...tokenIndex.keys(), ...winnerTokenIndex.keys()];
 		if (ids.length) {
 			pmWs!.send(JSON.stringify({
 				assets_ids: ids,
@@ -616,7 +687,9 @@ function connectPolymarketWS(): void {
 
 // Seed initial state, then keep the token map fresh.
 void bootstrapTokens().then(() => connectPolymarketWS());
+void bootstrapWinnerTokens();
 setInterval(bootstrapTokens, BOOTSTRAP_INTERVAL);
+setInterval(bootstrapWinnerTokens, BOOTSTRAP_INTERVAL);
 
 // ── Elysia app ───────────────────────────────────────────────────────
 
@@ -663,6 +736,7 @@ const app = new Elysia()
 	})
 	.get("/api/odds", () => ({
 		odds: oddsCache,
+		winnerProbs,
 		lastPoll: oddsLastPoll?.toISOString() ?? null,
 		error: oddsError,
 	}))
@@ -689,7 +763,7 @@ const app = new Elysia()
 			ws.send(JSON.stringify({
 				type: "snapshot",
 				matches: buildResults(),
-				odds: { odds: oddsCache, lastPoll: oddsLastPoll?.toISOString() ?? null },
+				odds: { odds: oddsCache, winnerProbs, lastPoll: oddsLastPoll?.toISOString() ?? null },
 			}));
 		},
 		close(ws) { clients.delete(ws); },

@@ -70,6 +70,7 @@ interface PlayerScore {
   name: string;
   teamIndices: number[];
   alive: number;
+  equity: number; // Σ P(team wins WC) across owned teams (champion equity)
   totalStagePts: number;
   groupPoints: number; // sum of group-stage points across owned teams
   groupGD: number; // sum of goal differential across owned teams
@@ -82,9 +83,11 @@ interface PlayerScore {
 export function Standings({
   gMatches,
   kMatches,
+  winnerProbs = {},
 }: {
   gMatches: GroupMatch[];
   kMatches: KnockoutMatch[];
+  winnerProbs?: Record<number, number>;
 }) {
   const alive = useMemo(
     () => getAliveTeams(gMatches, kMatches),
@@ -104,6 +107,7 @@ export function Standings({
         let aliveCount = 0;
         let groupPoints = 0;
         let groupGD = 0;
+        let equity = 0;
 
         for (const tIdx of p.teamIndices) {
           const stage = getTeamStage(tIdx, kMatches);
@@ -113,6 +117,8 @@ export function Standings({
             bestStage = stage;
           }
           if (alive.has(tIdx)) aliveCount++;
+          // Teams eliminated can't win — skip their (stale) market prob.
+          if (alive.has(tIdx)) equity += winnerProbs[tIdx] ?? 0;
 
           const row = rowFor(tIdx);
           if (row) {
@@ -127,6 +133,7 @@ export function Standings({
           name: p.name,
           teamIndices: p.teamIndices,
           alive: aliveCount,
+          equity,
           totalStagePts,
           groupPoints,
           groupGD,
@@ -139,8 +146,9 @@ export function Standings({
 
       const STAGE_ORDER = ["group", "r32", "r16", "qf", "sf", "final", "winner"];
 
-      // Sort: alive → KO stage pts → group points → group GD → best stage → last elim later
+      // Sort: champion equity → alive → KO stage pts → group points → group GD → best stage
       scores.sort((a, b) => {
+        if (b.equity !== a.equity) return b.equity - a.equity;
         if (b.alive !== a.alive) return b.alive - a.alive;
         if (b.totalStagePts !== a.totalStagePts)
           return b.totalStagePts - a.totalStagePts;
@@ -196,7 +204,7 @@ export function Standings({
         runnerUpPlayer,
         firstOutPlayer,
       };
-    }, [gMatches, kMatches, alive]);
+    }, [gMatches, kMatches, alive, winnerProbs]);
 
   // Live preview until finalized: project champion/runner-up from current
   // standings leader (#1/#2), project first-out from current last place.
@@ -289,8 +297,9 @@ export function Standings({
               <div className="standing-stats">
                 <div
                   className={`standing-alive${p.alive === 0 ? " none" : ""}`}
+                  title="Champion equity: Σ P(team wins WC)"
                 >
-                  {p.alive}/6
+                  {(p.equity * 100).toFixed(1)}%
                 </div>
                 <div className="standing-record">
                   {p.eliminated
