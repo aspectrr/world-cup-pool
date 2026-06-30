@@ -110,7 +110,7 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 					</div>
 					{showOdds &&
 						(homePct !== undefined ? (
-							<span className="game-odds">{(homePct * 100).toFixed(2)}%</span>
+							<span className="game-odds">{(homePct * 100).toFixed(1)}%</span>
 						) : (
 							<span className="game-odds game-odds-empty" aria-label="odds pending">—</span>
 						))}
@@ -123,7 +123,7 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 					</div>
 					{showOdds &&
 						(awayPct !== undefined ? (
-							<span className="game-odds">{(awayPct * 100).toFixed(2)}%</span>
+							<span className="game-odds">{(awayPct * 100).toFixed(1)}%</span>
 						) : (
 							<span className="game-odds game-odds-empty" aria-label="odds pending">—</span>
 						))}
