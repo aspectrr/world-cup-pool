@@ -22,6 +22,9 @@ interface GameMatch {
 	clock: string;
 	round: string; // "Group A" or "R32" etc
 	detail?: string;
+	// Winner team idx for knockout games decided by ET or pens (tied score).
+	// Lets the Games tab flag the advancing team. Null for group matches.
+	winnerIdx?: number | null;
 }
 
 interface DayGroup {
@@ -60,6 +63,19 @@ function formatTime(iso: string): string {
 	});
 }
 
+/** Finished-match badge. Plain "FT" is dropped — the dimmed row + scores
+ *  already say finished; only the exceptions (pens, AET) earn a pill. */
+function finishBadge(
+	detail: string | undefined,
+): { label: string; variant: "pens" | "aet" } | null {
+	if (!detail) return null;
+	const d = detail.toLowerCase();
+	if (d.includes("pen")) return { label: "Pens", variant: "pens" };
+	if (d.includes("aet") || d.includes("after extra"))
+		return { label: "AET", variant: "aet" };
+	return null;
+}
+
 function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 	const home = TEAMS[m.homeIdx];
 	const away = TEAMS[m.awayIdx];
@@ -72,6 +88,15 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 	const showOdds = isLive || m.status === "scheduled";
 	const homePct = odds?.pcts[m.homeIdx];
 	const awayPct = odds?.pcts[m.awayIdx];
+	// Knockout games decided by penalties finish level on regulation
+	// score — flag the advancing side so the winner is unambiguous.
+	const pensDecided =
+		isFinished &&
+		m.detail?.includes("Pens") &&
+		m.winnerIdx !== null &&
+		m.winnerIdx !== undefined;
+	const homeWonPens = pensDecided && m.winnerIdx === m.homeIdx;
+	const awayWonPens = pensDecided && m.winnerIdx === m.awayIdx;
 
 	return (
 		<div
@@ -113,8 +138,12 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 					</>
 				) : isFinished ? (
 					<>
-						<span className="game-score-num">{m.homeScore}</span>
-						<span className="game-score-num">{m.awayScore}</span>
+						<span className={`game-score-num${homeWonPens ? " pens-won" : ""}`}>
+							{m.homeScore}
+						</span>
+						<span className={`game-score-num${awayWonPens ? " pens-won" : ""}`}>
+							{m.awayScore}
+						</span>
 					</>
 				) : (
 					<>
@@ -133,9 +162,14 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 				{!isLive && m.date && (
 					<span className="game-time">{formatTime(m.date)}</span>
 				)}
-				{isFinished && m.detail && (
-					<span className="game-detail">{m.detail}</span>
-				)}
+				{isFinished && (() => {
+					const badge = finishBadge(m.detail);
+					return badge ? (
+						<span className={`game-badge game-badge-${badge.variant}`}>
+							{badge.label}
+						</span>
+					) : null;
+				})()}
 				<span className="game-round">{m.round}</span>
 			</div>
 		</div>
@@ -168,6 +202,7 @@ export function GamesView({
 				clock: m.clock ?? "",
 				round: `Group ${m.group}`,
 				detail: m.detail,
+				winnerIdx: undefined,
 			});
 		}
 
@@ -184,6 +219,7 @@ export function GamesView({
 				clock: m.clock ?? "",
 				round: m.round,
 				detail: m.detail,
+				winnerIdx: m.winnerIdx,
 			});
 		}
 

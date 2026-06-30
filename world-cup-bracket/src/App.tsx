@@ -251,20 +251,10 @@ export default function App() {
 					const live = mergeLive(homeIdx, awayIdx);
 					if (live) Object.assign(base, live);
 				}
-				// Register winner for downstream matches.
-				winnerOf.set(
-					m.id,
-					base.played &&
-						base.homeScore !== null &&
-						base.awayScore !== null &&
-						base.status !== "live"
-						? base.homeScore > base.awayScore
-							? homeIdx
-							: base.awayScore > base.homeScore
-								? awayIdx
-								: null
-						: null,
-				);
+				// Register winner for downstream matches. Must use resolveWinner
+				// (not raw score comparison) so penalty/ET wins — where regulation
+				// score is tied but ESPN sets winnerIdx — propagate to the next round.
+				winnerOf.set(m.id, resolveWinner(base));
 				return base;
 			}
 
