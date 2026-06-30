@@ -301,17 +301,17 @@ export function Standings({
                   title={
                     hasWinnerData
                       ? "Champion equity: Σ P(team wins WC)"
-                      : "Teams still alive"
+                      : "Champion equity pending"
                   }
                 >
                   {hasWinnerData
                     ? `${(p.equity * 100).toFixed(1)}%`
-                    : `${p.alive}/6`}
+                    : "—"}
                 </div>
                 <div className="standing-record">
                   {p.eliminated
                     ? `ELIMINATED ${p.bestStage.toUpperCase()} STAGE`
-                    : `ALIVE`}
+                    : `${p.alive}/6 ALIVE`}
                 </div>
                 {prizeLabel && (
                   <div className="standing-prize">{prizeLabel}</div>
