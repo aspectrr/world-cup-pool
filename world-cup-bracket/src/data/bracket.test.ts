@@ -36,6 +36,53 @@ describe("generateKnockoutMatches", () => {
 		expect(new Set(ids).size).toBe(16);
 		ids.forEach((id) => expect(/^M\d{2}$/.test(id)).toBe(true));
 	});
+
+	// The FIFA 2026 bracket tree (top→bottom). Each match's seed labels
+	// encode its feeders; parse them to verify against FIFA's fixed pairings.
+	const FEEDER_OF: Record<string, [string, string]> = {
+		M89: ["M74", "M77"], M90: ["M73", "M75"],
+		M91: ["M76", "M78"], M92: ["M79", "M80"],
+		M93: ["M83", "M84"], M94: ["M81", "M82"],
+		M95: ["M86", "M88"], M96: ["M85", "M87"],
+		M97: ["M89", "M90"], M98: ["M93", "M94"],
+		M99: ["M91", "M92"], M100: ["M95", "M96"],
+		M101: ["M97", "M98"], M102: ["M99", "M100"],
+		M104: ["M101", "M102"],
+	};
+
+	test("every knockout match feeds from its FIFA-fixed pair", () => {
+		const byId = new Map(
+			generateKnockoutMatches().map((m) => [m.id, m]),
+		);
+		for (const [id, [a, b]] of Object.entries(FEEDER_OF)) {
+			const m = byId.get(id)!;
+			expect(m.homeSeed).toBe(`Winner ${a}`);
+			expect(m.awaySeed).toBe(`Winner ${b}`);
+		}
+	});
+
+	test("R16 array is in bracket (top→bottom) order, not ID order", () => {
+		// M93/M94 (top half) must sit above M91/M92 (bottom half) so each QF
+		// block lines up with its R16 feeders when rendered by array index.
+		const r16 = generateKnockoutMatches()
+			.filter((m) => m.round === "R16")
+			.map((m) => m.id);
+		expect(r16).toEqual([
+			"M89", "M90", "M93", "M94", "M91", "M92", "M95", "M96",
+		]);
+	});
+
+	test("QF M98 feeds M93+M94 (top half), M99 feeds M91+M92 (bottom half)", () => {
+		// Regression: these two were visually swapped in production because
+		// the R32/R16 arrays were in FIFA-ID order, not bracket-tree order.
+		const byId = new Map(
+			generateKnockoutMatches().map((m) => [m.id, m]),
+		);
+		expect(byId.get("M98")!.homeSeed).toBe("Winner M93");
+		expect(byId.get("M98")!.awaySeed).toBe("Winner M94");
+		expect(byId.get("M99")!.homeSeed).toBe("Winner M91");
+		expect(byId.get("M99")!.awaySeed).toBe("Winner M92");
+	});
 });
 
 describe("populateR32 — fixture: Netherlands vs Morocco in M75", () => {
