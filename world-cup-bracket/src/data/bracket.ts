@@ -111,32 +111,40 @@ export interface R32Slot {
 }
 
 /**
- * Ordered R32 slots. Order is chosen so:
- *   - consecutive pairs feed R16 (R16[n] = W{R32[2n]} vs W{R32[2n+1]})
- *   - which then chains correctly into QF / SF / Final per FIFA pairings
+ * Ordered R32 slots, laid out top→bottom in the visual bracket tree.
  *
- * Mapping derived from FIFA R16 schedule:
- *   M89 = W M74 vs W M77    M93 = W M83 vs W M84
- *   M90 = W M73 vs W M75    M94 = W M81 vs W M82
- *   M91 = W M76 vs W M78    M95 = W M86 vs W M88
- *   M92 = W M79 vs W M80    M96 = W M85 vs W M87
- *   QF: M97=M89+M90, M98=M93+M94, M99=M91+M92, M100=M95+M96
- *   SF: M101=M97+M98, M102=M99+M100
- *   F:  W M101 vs W M102
+ * Consecutive pairs feed one R16 match (R16[n] = W{R32[2n]} vs W{R32[2n+1]}),
+ * consecutive R16 pairs feed a QF, and so on through SF + Final — so the
+ * array doubles as the rendering order: each match sits between its feeders.
+ *
+ * FIFA's match *numbers* do NOT climb in tree order, so R16/QF IDs are
+ * assigned explicitly below (see R16_IDS). The tree (source: FIFA schedule
+ * + 2026_FIFA_World_Cup_knockout_stage) is:
+ *
+ *   top half (→ SF M101, Dallas):
+ *     M89 = W M74 vs W M77   M93 = W M83 vs W M84
+ *     M90 = W M73 vs W M75   M94 = W M81 vs W M82
+ *     QF M97 = W M89 + W M90    QF M98 = W M93 + W M94
+ *   bottom half (→ SF M102, Atlanta):
+ *     M91 = W M76 vs W M78   M95 = W M86 vs W M88
+ *     M92 = W M79 vs W M80   M96 = W M85 vs W M87
+ *     QF M99 = W M91 + W M92    QF M100 = W M95 + W M96
+ *   SF M101 = W M97 + W M98    SF M102 = W M99 + W M100
+ *   Final = W M101 vs W M102
  */
 export const R32_SLOTS: R32Slot[] = [
 	{ id: "M74", home: { kind: "1", group: "E" }, away: { kind: "3", winnerKey: "1E" } }, // Germany vs 3rd
 	{ id: "M77", home: { kind: "1", group: "I" }, away: { kind: "3", winnerKey: "1I" } }, // 1I vs 3rd
 	{ id: "M73", home: { kind: "2", group: "A" }, away: { kind: "2", group: "B" } }, // 2A vs 2B
 	{ id: "M75", home: { kind: "1", group: "F" }, away: { kind: "2", group: "C" } }, // 1F vs 2C (NED vs MAR)
-	{ id: "M76", home: { kind: "1", group: "C" }, away: { kind: "2", group: "F" } }, // 1C vs 2F (BRA vs JPN)
-	{ id: "M78", home: { kind: "2", group: "E" }, away: { kind: "2", group: "I" } }, // 2E vs 2I
-	{ id: "M79", home: { kind: "1", group: "A" }, away: { kind: "3", winnerKey: "1A" } }, // Mexico vs 3rd
-	{ id: "M80", home: { kind: "1", group: "L" }, away: { kind: "3", winnerKey: "1L" } }, // 1L vs 3rd
 	{ id: "M83", home: { kind: "2", group: "K" }, away: { kind: "2", group: "L" } }, // 2K vs 2L
 	{ id: "M84", home: { kind: "1", group: "H" }, away: { kind: "2", group: "J" } }, // 1H vs 2J
 	{ id: "M81", home: { kind: "1", group: "D" }, away: { kind: "3", winnerKey: "1D" } }, // USA vs 3rd
 	{ id: "M82", home: { kind: "1", group: "G" }, away: { kind: "3", winnerKey: "1G" } }, // 1G vs 3rd
+	{ id: "M76", home: { kind: "1", group: "C" }, away: { kind: "2", group: "F" } }, // 1C vs 2F (BRA vs JPN)
+	{ id: "M78", home: { kind: "2", group: "E" }, away: { kind: "2", group: "I" } }, // 2E vs 2I
+	{ id: "M79", home: { kind: "1", group: "A" }, away: { kind: "3", winnerKey: "1A" } }, // Mexico vs 3rd
+	{ id: "M80", home: { kind: "1", group: "L" }, away: { kind: "3", winnerKey: "1L" } }, // 1L vs 3rd
 	{ id: "M86", home: { kind: "1", group: "J" }, away: { kind: "2", group: "H" } }, // ARG vs 2H
 	{ id: "M88", home: { kind: "2", group: "D" }, away: { kind: "2", group: "G" } }, // 2D vs 2G
 	{ id: "M85", home: { kind: "1", group: "B" }, away: { kind: "3", winnerKey: "1B" } }, // SUI vs 3rd
@@ -164,12 +172,17 @@ export function generateKnockoutMatches(): KnockoutMatch[] {
 
 	const r32Start = 0;
 
-	// R16: each consecutive R32 pair feeds one R16 match
+	// R16: each consecutive R32 pair feeds one R16 match. R32_SLOTS is in
+	// bracket (top→bottom) order so consecutive pairs are visually adjacent,
+	// but FIFA's R16 numbering doesn't follow that order — assign IDs
+	// explicitly so feeders and IDs both stay correct (M89,M90,M93,M94 top
+	// half; M91,M92,M95,M96 bottom half).
+	const R16_IDS = ["M89", "M90", "M93", "M94", "M91", "M92", "M95", "M96"];
 	for (let i = 0; i < 8; i++) {
 		const a = matches[r32Start + i * 2];
 		const b = matches[r32Start + i * 2 + 1];
 		matches.push({
-			id: `M${89 + i}`,
+			id: R16_IDS[i]!,
 			round: "R16",
 			homeIdx: null,
 			awayIdx: null,
@@ -182,19 +195,12 @@ export function generateKnockoutMatches(): KnockoutMatch[] {
 	}
 
 	const r16Start = 16;
-	// QF: FIFA pairings are not in R16-array order — M98 draws from M93/M94
-	// (Jul 6 winners) and M99 from M91/M92 (Jul 5 winners). Map explicitly.
-	// M97=M89+M90, M98=M93+M94, M99=M91+M92, M100=M95+M96
-	const QF_FEEDERS: Array<[number, number]> = [
-		[0, 1], // M97 ← M89, M90
-		[4, 5], // M98 ← M93, M94
-		[2, 3], // M99 ← M91, M92
-		[6, 7], // M100 ← M95, M96
-	];
+	// QF: consecutive R16 pairs. R16 is already in bracket order, so M97..M100
+	// land in vertical order with the correct FIFA feeders:
+	// M97=M89+M90, M98=M93+M94, M99=M91+M92, M100=M95+M96.
 	for (let i = 0; i < 4; i++) {
-		const [ai, bi] = QF_FEEDERS[i];
-		const a = matches[r16Start + ai];
-		const b = matches[r16Start + bi];
+		const a = matches[r16Start + i * 2];
+		const b = matches[r16Start + i * 2 + 1];
 		matches.push({
 			id: `M${97 + i}`,
 			round: "QF",
