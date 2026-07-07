@@ -130,17 +130,6 @@ export default function App() {
 
 	const liveCount = gMatches.filter((m) => m.status === "live").length;
 
-	// Team indices currently in a live game — used to flag bracket slots.
-	const liveTeamIdxs = useMemo(
-		() =>
-			new Set(
-				live.matches
-					.filter((m) => m.status === "live")
-					.flatMap((m) => [m.home_idx, m.away_idx]),
-			),
-		[live.matches],
-	);
-
 	// Group stage is over once every group match has been played
 	const groupStageDone = gMatches.length > 0 && gMatches.every((m) => m.played);
 
@@ -352,10 +341,7 @@ export default function App() {
 						/>
 					)}
 					{effectiveTab === "bracket" && (
-						<BracketView
-							matches={kMatches}
-							liveTeamIdxs={liveTeamIdxs}
-						/>
+						<BracketView matches={kMatches} />
 					)}
 					{effectiveTab === "my-teams" && (
 						<MyTeams
