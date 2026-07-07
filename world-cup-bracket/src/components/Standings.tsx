@@ -66,6 +66,28 @@ function getLastElimination(
   return { round: lastElimRound, date: lastElimDate };
 }
 
+// Human-readable stage where a player's last-surviving team was knocked out.
+// lastElimRound: -1 = group stage, 0..4 = R32, R16, QF, SF, FINAL.
+// This is the round they were ELIMINATED IN — distinct from getTeamStage(),
+// which returns the deepest round they survived through (off by one) and
+// can't tell group-stage exits from R32 exits.
+function elimStageLabel(round: number): string {
+  switch (round) {
+    case 0:
+      return "IN ROUND OF 32";
+    case 1:
+      return "IN ROUND OF 16";
+    case 2:
+      return "IN QUARTER FINALS";
+    case 3:
+      return "IN SEMI FINALS";
+    case 4:
+      return "IN THE FINAL";
+    default:
+      return "IN GROUP STAGE";
+  }
+}
+
 interface PlayerScore {
   name: string;
   teamIndices: number[];
@@ -310,7 +332,7 @@ export function Standings({
                 </div>
                 <div className="standing-record">
                   {p.eliminated
-                    ? `ELIMINATED ${p.bestStage.toUpperCase()} STAGE`
+                    ? `ELIMINATED ${elimStageLabel(p.lastElimRound)}`
                     : `${p.alive}/6 ALIVE`}
                 </div>
                 {prizeLabel && (

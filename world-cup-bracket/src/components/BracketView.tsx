@@ -67,24 +67,24 @@ function SeedPreview({
 
 function MatchCard({
 	m,
-	liveTeamIdxs,
 	matchById,
 }: {
 	m: KnockoutMatch;
-	liveTeamIdxs: Set<number>;
 	matchById: Map<string, KnockoutMatch>;
 }) {
 	const home = m.homeIdx !== null ? TEAMS[m.homeIdx] : null;
 	const away = m.awayIdx !== null ? TEAMS[m.awayIdx] : null;
-	const homeLive = m.homeIdx !== null && liveTeamIdxs.has(m.homeIdx);
-	const awayLive = m.awayIdx !== null && liveTeamIdxs.has(m.awayIdx);
+	// Highlight only when THIS match is live. Flagging by team membership
+	// (whether a team plays in any live game) wrongly lights up that team's
+	// already-played earlier rounds too.
+	const isLive = m.status === "live";
 	const winnerIdx = knockoutWinner(m);
 	const homeWon = winnerIdx !== null && winnerIdx === m.homeIdx;
 	const awayWon = winnerIdx !== null && winnerIdx === m.awayIdx;
 
 	return (
 		<div className="bracket-match">
-			<div className={`bracket-slot${homeWon ? " winner" : ""}${homeLive ? " live" : ""}`}>
+			<div className={`bracket-slot${homeWon ? " winner" : ""}${isLive ? " live" : ""}`}>
 				{m.status === "live" && m.clock && (
 					<span className="bracket-live-clock">
 						<span className="live-pip" />
@@ -104,7 +104,7 @@ function MatchCard({
 					<span className="score">{m.homeScore}</span>
 				)}
 			</div>
-			<div className={`bracket-slot${awayWon ? " winner" : ""}${awayLive ? " live" : ""}`}>
+			<div className={`bracket-slot${awayWon ? " winner" : ""}${isLive ? " live" : ""}`}>
 				{away ? (
 					<>
 						<img src={flagUrl(away.code)} alt={away.code} />
@@ -149,10 +149,8 @@ const ROUND_SPAN: Record<string, number> = {
 
 export function BracketView({
 	matches,
-	liveTeamIdxs,
 }: {
 	matches: KnockoutMatch[];
-	liveTeamIdxs: Set<number>;
 }) {
 	const matchById = useMemo(
 		() => new Map(matches.map((m) => [m.id, m])),
@@ -223,7 +221,7 @@ export function BracketView({
 										gridRow: `${i * span + 1} / span ${span}`,
 									}}
 								>
-									<MatchCard m={m} liveTeamIdxs={liveTeamIdxs} matchById={matchById} />
+									<MatchCard m={m} matchById={matchById} />
 								</div>
 							);
 						}),
