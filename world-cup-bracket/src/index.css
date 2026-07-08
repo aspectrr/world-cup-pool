@@ -1008,6 +1008,88 @@ img {
 	color: var(--gold-light);
 }
 
+/* Empty day (no games) — synthetic "today" chip selected. */
+.games-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	gap: 12px;
+	padding: 32px 16px;
+	background: var(--card);
+	border-radius: 12px;
+	box-shadow: var(--shadow-card);
+}
+.games-empty-title {
+	font-family: "Oswald", sans-serif;
+	font-size: 1.05rem;
+	font-weight: 600;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: var(--text);
+}
+.games-empty-next {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+}
+.games-empty-next-label {
+	font-family: "Oswald", sans-serif;
+	font-size: 0.6rem;
+	font-weight: 600;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
+	color: var(--gold);
+}
+.games-empty-matchup {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	color: var(--text);
+	font-weight: 600;
+	font-size: 0.92rem;
+}
+.games-empty-side {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+}
+.games-empty-side-main {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.games-empty-owner {
+	font-size: 0.68rem;
+	font-weight: 600;
+	color: var(--gold);
+	letter-spacing: 0.3px;
+	line-height: 1;
+}
+.games-empty-flag {
+	width: 22px;
+	height: 15px;
+	object-fit: cover;
+	border-radius: 2px;
+}
+.games-empty-vs {
+	color: var(--text-dim);
+	font-size: 0.7rem;
+	font-weight: 500;
+}
+.games-empty-when {
+	color: var(--text-dim);
+	font-size: 0.78rem;
+}
+.games-empty-done {
+	color: var(--text-dim);
+	font-size: 0.85rem;
+	font-style: italic;
+}
+
 /* ─── DATE PICKER BAR ─── */
 .games-date-bar {
 	display: flex;
