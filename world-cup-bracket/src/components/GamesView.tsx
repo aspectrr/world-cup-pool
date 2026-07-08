@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
-import { PLAYERS } from "../data/players";
+import { teamOwner } from "../data/players";
 import { oddsKey, type MatchOdds } from "../hooks/useLive";
 import {
 	buildScheduleDays,
@@ -12,13 +12,6 @@ import {
 	type GameMatch,
 	type NextGame,
 } from "./schedule";
-
-function teamOwner(teamIdx: number): string | null {
-	for (const p of PLAYERS) {
-		if (p.teamIndices.includes(teamIdx)) return p.name;
-	}
-	return null;
-}
 
 /** Finished-match badge. Plain "FT" is dropped — the dimmed row + scores
  *  already say finished; only the exceptions (pens, AET) earn a pill. */
@@ -136,6 +129,11 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 /** Empty-state body for a day with no games (only the synthetic "today" chip).
  *  Shows the next upcoming fixture so the user knows when play resumes. */
 function EmptyDay({ nextGame }: { nextGame: NextGame | null }) {
+	const homeOwner =
+		nextGame && nextGame.homeIdx !== null ? teamOwner(nextGame.homeIdx) : null;
+	const awayOwner =
+		nextGame && nextGame.awayIdx !== null ? teamOwner(nextGame.awayIdx) : null;
+
 	return (
 		<div className="games-empty">
 			<div className="games-empty-title">No games today</div>
@@ -145,23 +143,37 @@ function EmptyDay({ nextGame }: { nextGame: NextGame | null }) {
 					<div className="games-empty-matchup">
 						{nextGame.homeIdx !== null && nextGame.awayIdx !== null ? (
 							<>
-								<img
-									className="games-empty-flag"
-									src={flagUrl(TEAMS[nextGame.homeIdx].code)}
-									alt={TEAMS[nextGame.homeIdx].code}
-								/>
-								<span className="games-empty-team">
-									{shortName(TEAMS[nextGame.homeIdx].name, 16)}
-								</span>
+								<div className="games-empty-side">
+									<div className="games-empty-side-main">
+										<img
+											className="games-empty-flag"
+											src={flagUrl(TEAMS[nextGame.homeIdx].code)}
+											alt={TEAMS[nextGame.homeIdx].code}
+										/>
+										<span className="games-empty-team">
+											{shortName(TEAMS[nextGame.homeIdx].name, 16)}
+										</span>
+									</div>
+									<span className="games-empty-owner">
+										{homeOwner ?? "\u00A0"}
+									</span>
+								</div>
 								<span className="games-empty-vs">vs</span>
-								<img
-									className="games-empty-flag"
-									src={flagUrl(TEAMS[nextGame.awayIdx].code)}
-									alt={TEAMS[nextGame.awayIdx].code}
-								/>
-								<span className="games-empty-team">
-									{shortName(TEAMS[nextGame.awayIdx].name, 16)}
-								</span>
+								<div className="games-empty-side">
+									<div className="games-empty-side-main">
+										<img
+											className="games-empty-flag"
+											src={flagUrl(TEAMS[nextGame.awayIdx].code)}
+											alt={TEAMS[nextGame.awayIdx].code}
+										/>
+										<span className="games-empty-team">
+											{shortName(TEAMS[nextGame.awayIdx].name, 16)}
+										</span>
+									</div>
+									<span className="games-empty-owner">
+										{awayOwner ?? "\u00A0"}
+									</span>
+								</div>
 							</>
 						) : (
 							<span className="games-empty-team">

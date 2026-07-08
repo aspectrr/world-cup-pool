@@ -29,6 +29,14 @@ export const PLAYERS: Player[] = DRAW_DATA.players.map((name, i) => ({
 	teamIndices: DRAW_DATA.playerTeams[i],
 }));
 
+/** Pool player who drafted `teamIdx`, or null if the team is unowned. */
+export function teamOwner(teamIdx: number): string | null {
+	for (const p of PLAYERS) {
+		if (p.teamIndices.includes(teamIdx)) return p.name;
+	}
+	return null;
+}
+
 export const PRIZES = {
 	winner: 20,
 	runnerUp: 10,
