@@ -3,64 +3,21 @@ import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, flagUrl, shortName } from "../data/teams";
 import { PLAYERS } from "../data/players";
 import { oddsKey, type MatchOdds } from "../hooks/useLive";
+import {
+	buildScheduleDays,
+	dayKey,
+	formatDate,
+	formatTime,
+	roundLabel,
+	type GameMatch,
+	type NextGame,
+} from "./schedule";
 
 function teamOwner(teamIdx: number): string | null {
 	for (const p of PLAYERS) {
 		if (p.teamIndices.includes(teamIdx)) return p.name;
 	}
 	return null;
-}
-
-interface GameMatch {
-	id: string;
-	date: string;
-	homeIdx: number;
-	awayIdx: number;
-	homeScore: number | null;
-	awayScore: number | null;
-	status: "scheduled" | "live" | "finished";
-	clock: string;
-	round: string; // "Group A" or "R32" etc
-	detail?: string;
-	// Winner team idx for knockout games decided by ET or pens (tied score).
-	// Lets the Games tab flag the advancing team. Null for group matches.
-	winnerIdx?: number | null;
-}
-
-interface DayGroup {
-	key: string; // YYYY-MM-DD (local)
-	label: string; // "Thu, Jun 11"
-	weekday: string; // "THU"
-	monthDay: string; // "Jun 11"
-	games: GameMatch[];
-}
-
-/** Local-day key from ISO string (so grouping matches user's calendar). */
-function dayKey(iso: string): string {
-	if (!iso) return "";
-	const d = new Date(iso);
-	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-		d.getDate(),
-	).padStart(2, "0")}`;
-}
-
-function formatDate(iso: string): string {
-	if (!iso) return "TBD";
-	const d = new Date(iso);
-	return d.toLocaleDateString("en-US", {
-		weekday: "short",
-		month: "short",
-		day: "numeric",
-	});
-}
-
-function formatTime(iso: string): string {
-	if (!iso) return "";
-	const d = new Date(iso);
-	return d.toLocaleTimeString("en-US", {
-		hour: "numeric",
-		minute: "2-digit",
-	});
 }
 
 /** Finished-match badge. Plain "FT" is dropped — the dimmed row + scores
@@ -176,6 +133,55 @@ function GameRow({ m, odds }: { m: GameMatch; odds?: MatchOdds }) {
 	);
 }
 
+/** Empty-state body for a day with no games (only the synthetic "today" chip).
+ *  Shows the next upcoming fixture so the user knows when play resumes. */
+function EmptyDay({ nextGame }: { nextGame: NextGame | null }) {
+	return (
+		<div className="games-empty">
+			<div className="games-empty-title">No games today</div>
+			{nextGame ? (
+				<div className="games-empty-next">
+					<span className="games-empty-next-label">Next up</span>
+					<div className="games-empty-matchup">
+						{nextGame.homeIdx !== null && nextGame.awayIdx !== null ? (
+							<>
+								<img
+									className="games-empty-flag"
+									src={flagUrl(TEAMS[nextGame.homeIdx].code)}
+									alt={TEAMS[nextGame.homeIdx].code}
+								/>
+								<span className="games-empty-team">
+									{shortName(TEAMS[nextGame.homeIdx].name, 16)}
+								</span>
+								<span className="games-empty-vs">vs</span>
+								<img
+									className="games-empty-flag"
+									src={flagUrl(TEAMS[nextGame.awayIdx].code)}
+									alt={TEAMS[nextGame.awayIdx].code}
+								/>
+								<span className="games-empty-team">
+									{shortName(TEAMS[nextGame.awayIdx].name, 16)}
+								</span>
+							</>
+						) : (
+							<span className="games-empty-team">
+								{roundLabel(nextGame.round)}
+							</span>
+						)}
+					</div>
+					<div className="games-empty-when">
+						{formatDate(nextGame.date)} at {formatTime(nextGame.date)}
+					</div>
+				</div>
+			) : (
+				<div className="games-empty-next games-empty-done">
+					The tournament has ended.
+				</div>
+			)}
+		</div>
+	);
+}
+
 export function GamesView({
 	gMatches,
 	kMatches,
@@ -185,83 +191,23 @@ export function GamesView({
 	kMatches: KnockoutMatch[];
 	odds?: Record<string, MatchOdds>;
 }) {
-	// Build sorted list of match days with their games.
-	const days = useMemo<DayGroup[]>(() => {
-		const all: GameMatch[] = [];
-
-		for (const m of gMatches) {
-			if (!m.date) continue;
-			all.push({
-				id: m.id,
-				date: m.date,
-				homeIdx: m.homeIdx,
-				awayIdx: m.awayIdx,
-				homeScore: m.homeScore,
-				awayScore: m.awayScore,
-				status: m.status ?? (m.played ? "finished" : "scheduled"),
-				clock: m.clock ?? "",
-				round: `Group ${m.group}`,
-				detail: m.detail,
-				winnerIdx: undefined,
-			});
-		}
-
-		for (const m of kMatches) {
-			if (m.homeIdx === null || m.awayIdx === null) continue;
-			all.push({
-				id: m.id,
-				date: m.date ?? "",
-				homeIdx: m.homeIdx,
-				awayIdx: m.awayIdx,
-				homeScore: m.homeScore,
-				awayScore: m.awayScore,
-				status: m.status ?? (m.played ? "finished" : "scheduled"),
-				clock: m.clock ?? "",
-				round: m.round,
-				detail: m.detail,
-				winnerIdx: m.winnerIdx,
-			});
-		}
-
-		all.sort((a, b) => a.date.localeCompare(b.date));
-
-		const byKey = new Map<string, GameMatch[]>();
-		for (const m of all) {
-			const k = dayKey(m.date);
-			if (!k) continue;
-			const arr = byKey.get(k);
-			if (arr) arr.push(m);
-			else byKey.set(k, [m]);
-		}
-
-		const out: DayGroup[] = [];
-		for (const [k, gs] of byKey) {
-			out.push({
-				key: k,
-				label: formatDate(gs[0].date),
-				weekday: new Date(gs[0].date)
-					.toLocaleDateString("en-US", { weekday: "short" })
-					.toUpperCase(),
-				monthDay: new Date(gs[0].date).toLocaleDateString("en-US", {
-					month: "short",
-					day: "numeric",
-				}),
-				games: gs,
-			});
-		}
-		out.sort((a, b) => a.key.localeCompare(b.key));
-		return out;
-	}, [gMatches, kMatches]);
-
 	const todayKey = dayKey(new Date().toISOString());
 
-	// Default selection: today if it's a match day, else nearest upcoming,
-	// else (everything past) the last match day.
+	// Build sorted list of match days with their games, plus the next
+	// upcoming fixture for the "no games today" empty state. `now` is
+	// sampled fresh inside the factory so the memo only re-rolls when
+	// todayKey crosses into a new local day.
+	const { days, nextGame } = useMemo(
+		() => buildScheduleDays(gMatches, kMatches, todayKey, new Date()),
+		[gMatches, kMatches, todayKey],
+	);
+
+	// Default selection: today. A synthetic chip is inserted when today has
+	// no games, so an empty day shows "no games today" instead of skipping
+	// to the next match day.
 	const defaultDay = useMemo(() => {
 		if (days.length === 0) return null;
-		if (days.some((d) => d.key === todayKey)) return todayKey;
-		const upcoming = days.find((d) => d.key >= todayKey);
-		return (upcoming ?? days[days.length - 1]).key;
+		return todayKey;
 	}, [days, todayKey]);
 
 	// selected === null until the user explicitly picks a day. Display falls
@@ -353,13 +299,17 @@ export function GamesView({
 							? `📅 ${current.label} — Today`
 							: current.label}
 					</div>
-					{current.games.map((g) => (
-						<GameRow
-							key={g.id}
-							m={g}
-							odds={odds[oddsKey(g.homeIdx, g.awayIdx)]}
-						/>
-					))}
+					{current.games.length > 0 ? (
+						current.games.map((g) => (
+							<GameRow
+								key={g.id}
+								m={g}
+								odds={odds[oddsKey(g.homeIdx, g.awayIdx)]}
+							/>
+						))
+					) : (
+						<EmptyDay nextGame={nextGame} />
+					)}
 				</div>
 			) : (
 				<div
