@@ -6,6 +6,7 @@ import {
   calcGroupStandings,
   getAliveTeams,
   getTeamStage,
+  isFinal,
   knockoutWinner,
 } from "../utils/standings";
 
@@ -189,7 +190,9 @@ export function Standings({
 
       // Champion = player who owns the WC winner (team that won the FINAL).
       // Uses knockoutWinner so penalty-shootout wins (tied score) count.
-      const finalMatch = kMatches.find((m) => m.round === "FINAL" && m.played);
+      const finalMatch = kMatches.find(
+        (m) => m.round === "FINAL" && isFinal(m),
+      );
       if (finalMatch) {
         const winnerIdx = knockoutWinner(finalMatch);
         if (winnerIdx !== null) {

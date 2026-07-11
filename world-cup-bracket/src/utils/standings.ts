@@ -2,15 +2,31 @@ import type { GroupMatch, GroupStanding, KnockoutMatch } from "../types";
 import { TEAMS, GROUPS } from "../data/teams";
 
 /**
+ * True when a match result is final. Excludes in-progress ("live") games.
+ *
+ * Standings, advancement, alive/eliminated, and R32 seeding all key off this
+ * so the pool standings only move on a finalized result — Games/Bracket
+ * still display live scores via `played` + `status === "live"`.
+ *
+ * `played` alone is true for both live and finished games, so any predicate
+ * that gates a result counting toward the standings must use this instead.
+ */
+export function isFinal(
+	m: Pick<GroupMatch | KnockoutMatch, "played" | "status">,
+): boolean {
+	return m.played && m.status !== "live";
+}
+
+/**
  * Winner team idx of a played knockout match. Prefers ESPN's explicit
  * `winner` flag (set for ET/pen wins where regulation score is tied),
  * falls back to score difference for regulation results. Returns null for
  * unplayed/drawn matches.
  */
 export function knockoutWinner(
-	m: Pick<KnockoutMatch, "played" | "homeIdx" | "awayIdx" | "homeScore" | "awayScore" | "winnerIdx">,
+	m: Pick<KnockoutMatch, "played" | "status" | "homeIdx" | "awayIdx" | "homeScore" | "awayScore" | "winnerIdx">,
 ): number | null {
-	if (!m.played || m.homeScore === null || m.awayScore === null) return null;
+	if (!isFinal(m) || m.homeScore === null || m.awayScore === null) return null;
 	if (m.homeIdx === null || m.awayIdx === null) return null;
 	if (m.winnerIdx !== null && m.winnerIdx !== undefined) return m.winnerIdx;
 	if (m.homeScore > m.awayScore) return m.homeIdx;
@@ -35,7 +51,7 @@ export function calcGroupStandings(
 	const map = new Map<string, GroupStanding[]>();
 
 	for (const m of matches) {
-		if (!m.played || m.homeScore === null || m.awayScore === null) continue;
+		if (!isFinal(m) || m.homeScore === null || m.awayScore === null) continue;
 
 		for (const idx of [m.homeIdx, m.awayIdx]) {
 			if (!map.has(TEAMS[idx].group)) {
@@ -115,7 +131,7 @@ export function getAliveTeams(
 	kMatches: KnockoutMatch[],
 ): Set<number> {
 	const groupStageDone =
-		gMatches.length > 0 && gMatches.every((m) => m.played);
+		gMatches.length > 0 && gMatches.every((m) => isFinal(m));
 
 	const alive = groupStageDone
 		? getAdvancingTeams(gMatches)
@@ -155,9 +171,9 @@ export function getClinchedGroupWinners(gMatches: GroupMatch[]): Set<number> {
 		const team = TEAMS[i];
 		const groupMatches = gMatches.filter((m) => m.group === team.group);
 		const played = groupMatches.filter(
-			(m) => m.played && m.homeScore !== null && m.awayScore !== null,
+			(m) => isFinal(m) && m.homeScore !== null && m.awayScore !== null,
 		);
-		const remaining = groupMatches.filter((m) => !m.played);
+		const remaining = groupMatches.filter((m) => !isFinal(m));
 		const n = remaining.length;
 		const totalPerms = Math.pow(3, n);
 
@@ -169,7 +185,7 @@ export function getClinchedGroupWinners(gMatches: GroupMatch[]): Set<number> {
 				const [hs, as] = SIM_OUTCOMES[tmp % 3];
 				tmp = Math.floor(tmp / 3);
 				const m = remaining[j];
-				simMatches.push({ ...m, played: true, homeScore: hs, awayScore: as });
+				simMatches.push({ ...m, played: true, status: "finished", homeScore: hs, awayScore: as });
 			}
 			const finalList = calcGroupStandings(simMatches).get(team.group) ?? [];
 			const pos = finalList.findIndex((s) => s.teamIdx === i) + 1;
@@ -257,9 +273,9 @@ export function getGroupAdvancementStatus(
 
 	const groupMatches = gMatches.filter((m) => m.group === team.group);
 	const played = groupMatches.filter(
-		(m) => m.played && m.homeScore !== null && m.awayScore !== null,
+		(m) => isFinal(m) && m.homeScore !== null && m.awayScore !== null,
 	);
-	const remaining = groupMatches.filter((m) => !m.played);
+	const remaining = groupMatches.filter((m) => !isFinal(m));
 
 	const zero = (idx: number): GroupStanding => ({
 		teamIdx: idx,
@@ -296,7 +312,7 @@ export function getGroupAdvancementStatus(
 			const [hs, as] = SIM_OUTCOMES[tmp % 3];
 			tmp = Math.floor(tmp / 3);
 			const m = remaining[i];
-			simMatches.push({ ...m, played: true, homeScore: hs, awayScore: as });
+			simMatches.push({ ...m, played: true, status: "finished", homeScore: hs, awayScore: as });
 		}
 
 		const finalList = calcGroupStandings(simMatches).get(team.group) ?? [];
