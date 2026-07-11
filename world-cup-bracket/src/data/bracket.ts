@@ -1,7 +1,7 @@
 import type { GroupMatch, KnockoutMatch } from "../types";
 import { TEAMS, GROUPS } from "./teams";
 import { ANNEX_C, WINNER_SLOTS } from "./annexc";
-import { calcGroupStandings } from "../utils/standings";
+import { calcGroupStandings, isFinal } from "../utils/standings";
 
 function groupTeamIndices(group: string): number[] {
 	return TEAMS.map((t, i) => ({ ...t, idx: i }))
@@ -298,13 +298,13 @@ export function populateR32(
 	const standings = calcGroupStandings(gMatches);
 
 	const allGroupPlayed =
-		gMatches.length > 0 && gMatches.every((m) => m.played);
+		gMatches.length > 0 && gMatches.every((m) => isFinal(m));
 
 	// A group is "decided" once all 6 of its matches are played. We need this
 	// per-group because runner-up / 3rd aren't safe until the group is done.
 	const groupDecided = new Map<string, boolean>();
 	for (const g of GROUPS) {
-		const played = gMatches.filter((m) => m.group === g && m.played).length;
+		const played = gMatches.filter((m) => m.group === g && isFinal(m)).length;
 		groupDecided.set(g, played === 6);
 	}
 
