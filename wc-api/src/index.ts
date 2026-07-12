@@ -474,6 +474,9 @@ async function bootstrapTokens(): Promise<void> {
 
 		const newPairTokens = new Map<string, { home?: string; away?: string; draw?: string }>();
 		const newTokenIndex = new Map<string, TokenMeta>();
+		// tokenId → last-trade price (from outcomePrices). Seeds tokenMids so
+		// odds render for newly-listed fixtures before any best_bid_ask fires.
+		const newSeeds = new Map<string, number>();
 
 		for (const ev of events) {
 			if (!ev.slug.startsWith("fifwc-")) continue;
@@ -494,12 +497,16 @@ async function bootstrapTokens(): Promise<void> {
 				if (m.sportsMarketType !== "soccer_team_to_advance") continue;
 				const outcomes = JSON.parse(m.outcomes) as string[];
 				const clobIds = JSON.parse(m.clobTokenIds) as string[];
+				let prices: string[] = [];
+				try { prices = JSON.parse(m.outcomePrices) as string[]; } catch { /* none */ }
 				for (let i = 0; i < outcomes.length; i++) {
 					const idx = pmTeamIdx(outcomes[i]);
 					const tid = clobIds[i];
 					if (idx === null || !tid) continue;
 					if (idx === homeIdx) { entry.home = tid; newTokenIndex.set(tid, { pairKey: key, teamIdx: homeIdx }); }
 					else if (idx === awayIdx) { entry.away = tid; newTokenIndex.set(tid, { pairKey: key, teamIdx: awayIdx }); }
+					const seedPrice = Number(prices[i]);
+					if (Number.isFinite(seedPrice)) newSeeds.set(tid, seedPrice);
 				}
 			}
 			if (entry.home && entry.away) newPairTokens.set(key, entry);
@@ -514,18 +521,35 @@ async function bootstrapTokens(): Promise<void> {
 		for (const [k, v] of newPairTokens) pairTokens.set(k, v);
 		for (const t of dropped) tokenMids.delete(t);
 
+		// Seed implied probabilities from each market's last-trade price so
+		// odds render immediately for newly-listed fixtures (e.g. a knockout
+		// game posted after the WS opened) — before any best_bid_ask fires.
+		// Live WS mids override these the moment a book update arrives.
+		// Mirrors the World Cup Winner seeding in bootstrapWinnerTokens.
+		let seeded = 0;
+		for (const [tid, price] of newSeeds) {
+			if (!tokenMids.has(tid)) { tokenMids.set(tid, price); seeded++; }
+		}
+		// Recompute every pair so seeded mids populate oddsCache.
+		for (const key of pairTokens.keys()) {
+			const updated = recomputePair(key);
+			if (updated) oddsCache[key] = updated;
+		}
+
 		oddsError = null;
 		console.log(
-			`[odds] ${new Date().toISOString()} — bootstrap ${pairTokens.size} matches, ${tokenIndex.size} tokens (+${added.length} -${dropped.length})`,
+			`[odds] ${new Date().toISOString()} — bootstrap ${pairTokens.size} matches, ${tokenIndex.size} tokens (+${added.length} -${dropped.length}, seeded ${seeded})`,
 		);
 
-		// Dynamic subscribe to new tokens without reconnecting.
+		if (seeded) scheduleOddsBroadcast();
+
+		// Polymarket's market socket does not reliably honour a second
+		// assets_ids message on an already-open connection, so newly-discovered
+		// tokens never receive book updates. Close the socket — onopen
+		// re-subscribes the full token set on reconnect, which is the only
+		// path proven to deliver prices for fresh fixtures.
 		if (added.length && pmWs?.readyState === WebSocket.OPEN) {
-			pmWs.send(JSON.stringify({
-				assets_ids: added,
-				type: "market",
-				custom_feature_enabled: true,
-			}));
+			pmWs.close();
 		}
 	} catch (e) {
 		oddsError = e instanceof Error ? e.message : "Unknown error";
