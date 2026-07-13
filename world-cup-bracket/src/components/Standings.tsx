@@ -169,10 +169,19 @@ export function Standings({
 
       const STAGE_ORDER = ["group", "r32", "r16", "qf", "sf", "final", "winner"];
 
-      // Sort: champion equity → alive → KO stage pts → group points → group GD → best stage
+      // Sort: champion equity → alive. Once both players are out, rank by
+      // who lasted longer (latest elimination ranks higher; first-out is
+      // last), tiebreaking on date so same-round exits order by kickoff, not
+      // name. Then fall back to KO stage pts → group points → group GD → stage.
       scores.sort((a, b) => {
         if (b.equity !== a.equity) return b.equity - a.equity;
         if (b.alive !== a.alive) return b.alive - a.alive;
+        if (a.eliminated && b.eliminated) {
+          if (a.lastElimRound !== b.lastElimRound)
+            return b.lastElimRound - a.lastElimRound;
+          const byDate = (b.lastElimDate || "").localeCompare(a.lastElimDate || "");
+          if (byDate !== 0) return byDate;
+        }
         if (b.totalStagePts !== a.totalStagePts)
           return b.totalStagePts - a.totalStagePts;
         if (b.groupPoints !== a.groupPoints)
