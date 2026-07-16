@@ -180,9 +180,11 @@ export default function App() {
 		}
 		const R32_START = "2026-06-28T00:00:00Z";
 
-		// Walk matches in array order (R32 → FINAL) so winners register before
-		// downstream matches that reference them via "Winner MXX" seed labels.
+		// Walk matches in array order (R32 → FINAL → THIRD) so winners AND
+		// losers register before downstream matches that reference them via
+		// "Winner MXX" / "Loser MXX" seed labels.
 		const winnerOf = new Map<string, number | null>();
+		const loserOf = new Map<string, number | null>();
 
 		// Merge a server result into a resolved matchup. Returns the patch fields
 		// (or null if no server data for this pairing).
@@ -225,6 +227,14 @@ export default function App() {
 			return null;
 		};
 
+		// Loser of a played knockout match — the OTHER competitor from the
+		// winner. Feeds the third-place play-off (M103 = Loser M101 v Loser M102).
+		const resolveLoser = (b: KnockoutMatch): number | null => {
+			const w = resolveWinner(b);
+			if (w === null || b.homeIdx === null || b.awayIdx === null) return null;
+			return w === b.homeIdx ? b.awayIdx : b.homeIdx;
+		};
+
 		return initKnockoutMatches.map((m): KnockoutMatch => {
 			if (m.round === "R32") {
 				const slot = R32_SLOTS.find((s) => s.id === m.id);
@@ -244,16 +254,21 @@ export default function App() {
 				// (not raw score comparison) so penalty/ET wins — where regulation
 				// score is tied but ESPN sets winnerIdx — propagate to the next round.
 				winnerOf.set(m.id, resolveWinner(base));
+				loserOf.set(m.id, resolveLoser(base));
 				return base;
 			}
 
-			// R16/QF/SF/FINAL: feeders referenced via "Winner MXX" seeds. Fill
-			// each slot independently so a resolved winner shows immediately
-			// even before its opponent is known.
-			const homeFeeder = m.homeSeed.match(/Winner (\w+)/)?.[1] ?? null;
-			const awayFeeder = m.awaySeed.match(/Winner (\w+)/)?.[1] ?? null;
-			const homeIdx = homeFeeder ? (winnerOf.get(homeFeeder) ?? null) : null;
-			const awayIdx = awayFeeder ? (winnerOf.get(awayFeeder) ?? null) : null;
+			// R16/QF/SF/FINAL/THIRD: feeders referenced via "Winner MXX" or
+			// "Loser MXX" seeds (THIRD = SF losers). Fill each slot independently
+			// so a resolved team shows immediately even before its opponent is known.
+			const resolveSeed = (seed: string): number | null => {
+				const sm = seed.match(/(Winner|Loser) (\w+)/);
+				if (!sm) return null;
+				const [, kind, feederId] = sm;
+				return (kind === "Loser" ? loserOf : winnerOf).get(feederId) ?? null;
+			};
+			const homeIdx = resolveSeed(m.homeSeed);
+			const awayIdx = resolveSeed(m.awaySeed);
 			const base: KnockoutMatch = { ...m };
 			if (homeIdx !== null) base.homeIdx = homeIdx;
 			if (awayIdx !== null) base.awayIdx = awayIdx;
@@ -262,6 +277,7 @@ export default function App() {
 				if (live) Object.assign(base, live);
 			}
 			winnerOf.set(m.id, resolveWinner(base));
+			loserOf.set(m.id, resolveLoser(base));
 			return base;
 		});
 	}, [gMatches, clinchedWinners, live.matches]);

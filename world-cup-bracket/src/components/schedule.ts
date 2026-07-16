@@ -79,6 +79,8 @@ export function roundLabel(round: string): string {
 			return "Semi-final";
 		case "FINAL":
 			return "Final";
+		case "THIRD":
+			return "Third-place play-off";
 		default:
 			return round; // "Group A" etc.
 	}

@@ -30,7 +30,7 @@ export interface GroupMatch {
 
 export interface KnockoutMatch {
 	id: string;
-	round: "R32" | "R16" | "QF" | "SF" | "FINAL";
+	round: "R32" | "R16" | "QF" | "SF" | "FINAL" | "THIRD";
 	homeIdx: number | null; // team index, null if TBD
 	awayIdx: number | null;
 	homeScore: number | null;

@@ -10,15 +10,16 @@ import { TEAMS } from "./teams";
 import type { GroupMatch } from "../types";
 
 describe("generateKnockoutMatches", () => {
-	test("produces 16 R32 + 8 R16 + 4 QF + 2 SF + 1 Final = 31 matches", () => {
+	test("produces 16 R32 + 8 R16 + 4 QF + 2 SF + 1 Final + 1 Third = 32 matches", () => {
 		const m = generateKnockoutMatches();
-		expect(m).toHaveLength(31);
+		expect(m).toHaveLength(32);
 		const byRound = (r: string) => m.filter((x) => x.round === r).length;
 		expect(byRound("R32")).toBe(16);
 		expect(byRound("R16")).toBe(8);
 		expect(byRound("QF")).toBe(4);
 		expect(byRound("SF")).toBe(2);
 		expect(byRound("FINAL")).toBe(1);
+		expect(byRound("THIRD")).toBe(1);
 	});
 
 	test("R16 feeders are consecutive R32 pairs", () => {
@@ -82,6 +83,16 @@ describe("generateKnockoutMatches", () => {
 		expect(byId.get("M98")!.awaySeed).toBe("Winner M94");
 		expect(byId.get("M99")!.homeSeed).toBe("Winner M91");
 		expect(byId.get("M99")!.awaySeed).toBe("Winner M92");
+	});
+
+	test("third-place play-off M103 feeds from the two SF losers", () => {
+		const byId = new Map(
+			generateKnockoutMatches().map((m) => [m.id, m]),
+		);
+		const m103 = byId.get("M103")!;
+		expect(m103.round).toBe("THIRD");
+		expect(m103.homeSeed).toBe("Loser M101");
+		expect(m103.awaySeed).toBe("Loser M102");
 	});
 });
 

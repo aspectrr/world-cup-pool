@@ -246,6 +246,21 @@ export function generateKnockoutMatches(): KnockoutMatch[] {
 		awaySeed: `Winner ${matches[sfStart + 1].id}`,
 	});
 
+	// Third-place play-off (M103): the two SF losers. It doesn't feed the
+	// Final, so it's appended after the binary tree as a standalone match —
+	// resolved in App.tsx from the SF losers, not winners.
+	matches.push({
+		id: "M103",
+		round: "THIRD",
+		homeIdx: null,
+		awayIdx: null,
+		homeScore: null,
+		awayScore: null,
+		played: false,
+		homeSeed: `Loser ${matches[sfStart].id}`,
+		awaySeed: `Loser ${matches[sfStart + 1].id}`,
+	});
+
 	return matches;
 }
 

@@ -604,6 +604,23 @@ img {
 	width: var(--bracket-match-w, 180px);
 	max-width: 100%;
 }
+/* Third-place play-off sits in the Final column (col 5), centered on
+ * M102's row — it's a standalone consolation match with no connectors. */
+.bracket-cell[data-round="THIRD"] {
+	flex-direction: column;
+	gap: 6px;
+}
+.bracket-third-label {
+	font-family: "Oswald", sans-serif;
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+	color: var(--gold);
+}
+.bracket-cell[data-round="THIRD"]::before,
+.bracket-cell[data-round="THIRD"] .bracket-match::before {
+	display: none;
+}
 .bracket-slot {
 	position: relative;
 	display: flex;
