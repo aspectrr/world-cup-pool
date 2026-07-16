@@ -149,7 +149,7 @@ export const GROUP_SCHEDULE: Record<string, string> = {
  * Official WC2026 knockout stage schedule — all times ET (UTC-4).
  *
  * Keys are FIFA match IDs (M73..M104) matching `KnockoutMatch.id` generated
- * by generateKnockoutMatches(). M103 (third-place play-off) is not tracked.
+ * by generateKnockoutMatches(). M103 is the third-place play-off (SF losers).
  *
  * Source: FIFA match schedule + worldcupwiki R32/R16/QF round pages.
  */
@@ -191,6 +191,9 @@ export const KNOCKOUT_SCHEDULE: Record<string, string> = {
 	// === Semi-finals (M101–M102) — Jul 14 to Jul 15 ===
 	M101: "2026-07-14T15:00:00-04:00", // W M97 vs W M98 (Dallas)
 	M102: "2026-07-15T15:00:00-04:00", // W M99 vs W M100 (Atlanta)
+
+	// === Third-place play-off (M103) — Jul 18 ===
+	M103: "2026-07-18T17:00:00-04:00", // Loser M101 vs Loser M102 (Miami)
 
 	// === Final (M104) — Jul 19 ===
 	M104: "2026-07-19T15:00:00-04:00", // W M101 vs W M102 (MetLife)

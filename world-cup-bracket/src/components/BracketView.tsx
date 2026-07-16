@@ -46,7 +46,7 @@ function SeedPreview({
 	seed: string;
 	matchById: Map<string, KnockoutMatch>;
 }) {
-	const feederId = seed.match(/Winner (\w+)/)?.[1] ?? null;
+	const feederId = seed.match(/(?:Winner|Loser) (\w+)/)?.[1] ?? null;
 	const feeder = feederId ? matchById.get(feederId) : undefined;
 	const h = feeder?.homeIdx !== null && feeder?.homeIdx !== undefined ? TEAMS[feeder.homeIdx] : null;
 	const a = feeder?.awayIdx !== null && feeder?.awayIdx !== undefined ? TEAMS[feeder.awayIdx] : null;
@@ -131,6 +131,9 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 const ROUND_ORDER = ["R32", "R16", "QF", "SF", "FINAL"];
+// Search order for the active game: THIRD before FINAL since the bronze
+// match plays the day before the Final.
+const LIVE_ORDER = [...ROUND_ORDER.slice(0, 4), "THIRD", "FINAL"];
 const ROUND_COL: Record<string, number> = {
 	R32: 1,
 	R16: 2,
@@ -156,38 +159,65 @@ export function BracketView({
 		() => new Map(matches.map((m) => [m.id, m])),
 		[matches],
 	);
+	// Third-place play-off sits outside the binary tree (SF losers, doesn't
+	// feed the Final), so it's rendered as a standalone card below the grid.
+	const thirdPlace = matches.find((m) => m.round === "THIRD") ?? null;
 	const rounds = ROUND_ORDER.map((round) => ({
 		round,
 		matches: matches.filter((m) => m.round === round),
 	}));
 
-	// Active round = round with a live game; else first round with unplayed
-	// games; else FINAL. Used to auto-center the bracket on mount.
-	const activeRound = useMemo(() => {
-		for (const r of ROUND_ORDER) {
-			if (matches.some((m) => m.round === r && m.status === "live")) return r;
+	// The game to auto-center on: a live game if any, else the earliest
+	// unplayed fixture (the "next" game). THIRD is searched before FINAL
+	// The game to auto-center on: a live game if any, else the earliest
+	// unplayed fixture (the "next" game), else the Final. Drives both the
+	// horizontal column-centering and the vertical scroll-to-game.
+	const activeMatch = useMemo(() => {
+		for (const r of LIVE_ORDER) {
+			const live = matches.find((m) => m.round === r && m.status === "live");
+			if (live) return live;
 		}
-		for (const r of ROUND_ORDER) {
-			if (matches.some((m) => m.round === r && !m.played)) return r;
+		for (const r of LIVE_ORDER) {
+			const next = matches.find((m) => m.round === r && !m.played);
+			if (next) return next;
 		}
-		return "FINAL";
+		return matches.find((m) => m.round === "FINAL") ?? null;
 	}, [matches]);
+
+	const activeRound = activeMatch?.round ?? "FINAL";
+	// Bronze lives in the Final's column, so center on the Final title for it.
+	const titleRound = activeRound === "THIRD" ? "FINAL" : activeRound;
+	const activeMatchId = activeMatch?.id ?? null;
 
 	const scrollRef = useRef<HTMLDivElement>(null);
 
-	// Center the active round's column whenever it shifts. Re-centers on mount
-	// and when the action moves to the next round (R32 done → R16, etc.).
+	// Auto-center horizontally on the active round's column AND scroll the
+	// page vertically to bring the active game into view. Re-runs on mount and
+	// whenever the active game shifts (round advancing / a game going live).
+	// Primitive deps so live score updates don't re-trigger the scroll.
 	useEffect(() => {
 		const container = scrollRef.current;
-		if (!container) return;
+		if (!container || !activeMatchId) return;
+
 		const title = container.querySelector<HTMLElement>(
-			`.bracket-round-title[data-round="${activeRound}"]`,
+			`.bracket-round-title[data-round="${titleRound}"]`,
 		);
-		if (!title) return;
-		const target =
-			title.offsetLeft - container.clientWidth / 2 + title.offsetWidth / 2;
-		container.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
-	}, [activeRound]);
+		if (title) {
+			const target =
+				title.offsetLeft - container.clientWidth / 2 + title.offsetWidth / 2;
+			container.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+		}
+
+		const matchEl = container.querySelector<HTMLElement>(
+			`[data-match-id="${activeMatchId}"]`,
+		);
+		if (matchEl) {
+			const rect = matchEl.getBoundingClientRect();
+			const targetTop =
+				window.scrollY + rect.top - window.innerHeight / 2 + rect.height / 2;
+			window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+		}
+	}, [activeMatchId, titleRound]);
 
 	return (
 		<div>
@@ -216,6 +246,7 @@ export function BracketView({
 									className="bracket-cell"
 									data-round={round}
 									data-pos={pos}
+									data-match-id={m.id}
 									style={{
 										gridColumn: ROUND_COL[round],
 										gridRow: `${i * span + 1} / span ${span}`,
@@ -226,6 +257,18 @@ export function BracketView({
 							);
 						}),
 					)}
+				{thirdPlace && (
+					<div
+						className="bracket-cell"
+						data-round="THIRD"
+						data-pos="single"
+						data-match-id={thirdPlace.id}
+						style={{ gridColumn: 5, gridRow: "10 / span 6" }}
+					>
+						<div className="bracket-third-label">Third-Place</div>
+						<MatchCard m={thirdPlace} matchById={matchById} />
+					</div>
+				)}
 				</div>
 			</div>
 		</div>
