@@ -298,12 +298,14 @@ export function Standings({
           // First-out: real (someone fully eliminated) gets gold badge +
           // grayscale; projected (just last place right now) gets red tint.
           // Every other fully-eliminated player also gets grayscale + stamp.
+          // The runner-up is an exception: their last team lost the final, so
+          // they're eliminated, but the 🥈 badge must win over the skull stamp.
           if (p.name === firstOutPlayer) {
             prizeLabel = `💸 $${PRIZES.firstOut} — First Out`;
             cardPrizeClass = " prize-firstout";
           } else if (p.name === projectedFirstOut) {
             cardPrizeClass = " prize-firstout projected";
-          } else if (p.eliminated) {
+          } else if (p.eliminated && p.name !== runnerUpPlayer) {
             cardPrizeClass = " prize-firstout";
             prizeLabel = `☠️ Eliminated`;
           }
